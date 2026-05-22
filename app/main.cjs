@@ -6,23 +6,21 @@ const XLSX = require('xlsx');
 app.setPath('userData', path.join(app.getPath('appData'), 'TianXiweiVoteAssistApp'));
 
 let mainWindow;
-let activeWorker = null;
+const activeWorkers = new Map(); // key: instanceId, value: utilityProcess
 let lastNotificationKey = '';
 let setupPromise = null;
 
 const rootDir = app.getAppPath();
 const runtimeDir = app.getPath('userData');
-const dataDir = path.join(runtimeDir, 'data');
-const scorePath = path.join(dataDir, 'vote-score-history.csv');
-const accountsPath = path.join(dataDir, 'accounts.json');
+const globalSettingsPath = path.join(runtimeDir, 'global-settings.json');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1120,
-    height: 760,
-    minWidth: 980,
-    minHeight: 680,
-    title: 'Tian Xiwei Vote Assist',
+    width: 1200,
+    height: 800,
+    minWidth: 1000,
+    minHeight: 700,
+    title: 'Tian Xiwei Vote Assist - Multi-Instance',
     backgroundColor: '#101010',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -39,15 +37,17 @@ function send(channel, payload) {
   mainWindow?.webContents.send(channel, payload);
 }
 
-function notifyIfNeeded(text) {
+function notifyIfNeeded(text, instanceName = '') {
   const nextKey = text.trim();
   if (!nextKey || nextKey === lastNotificationKey) return;
+
+  const prefix = instanceName ? `[${instanceName}] ` : '';
 
   if (/Bạn nhập captcha và bấm Sign Up thủ công/i.test(text)) {
     lastNotificationKey = nextKey;
     if (Notification.isSupported()) {
       new Notification({
-        title: 'Đã tới lúc nhập Captcha',
+        title: `${prefix}Đã tới lúc nhập Captcha`,
         body: 'Công cụ đã đi tới bước đăng ký. Mở trình duyệt và nhập captcha rồi bấm Sign Up.'
       }).show();
     }
@@ -58,48 +58,153 @@ function notifyIfNeeded(text) {
     lastNotificationKey = nextKey;
     if (Notification.isSupported()) {
       new Notification({
-        title: 'Đã tới bước đăng nhập Bugs',
+        title: `${prefix}Đã tới bước đăng nhập Bugs`,
         body: 'Công cụ đã mở form Bugs và đang tự chờ xác thực hoàn tất để bấm Log in.'
       }).show();
     }
   }
 }
 
-function runUtility(modulePath, args = []) {
+function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '') {
   return new Promise((resolve, reject) => {
     const child = utilityProcess.fork(modulePath, args, {
-      cwd: runtimeDir,
+      cwd: cwd,
       stdio: 'pipe'
     });
 
     child.stdout?.on('data', (data) => {
       const text = data.toString();
-      send('worker-log', text);
-      notifyIfNeeded(text);
+      send('worker-log', { instanceId, text });
+      notifyIfNeeded(text, instanceName);
     });
     child.stderr?.on('data', (data) => {
       const text = data.toString();
-      send('worker-log', text);
-      notifyIfNeeded(text);
+      send('worker-log', { instanceId, text });
+      notifyIfNeeded(text, instanceName);
     });
     child.on('exit', (code) => {
-      if (activeWorker === child) activeWorker = null;
+      activeWorkers.delete(instanceId);
+      send('run-state', { instanceId, running: false });
+      send('data-updated', { instanceId });
       code === 0 ? resolve() : reject(new Error(`Worker exited with code ${code}`));
     });
-    activeWorker = child;
+
+    activeWorkers.set(instanceId, child);
   });
 }
 
 async function ensureRuntimeDirs() {
-  await fs.mkdir(path.join(runtimeDir, 'data'), { recursive: true });
-  await fs.mkdir(path.join(runtimeDir, 'logs'), { recursive: true });
+  await fs.mkdir(path.join(runtimeDir, 'instances'), { recursive: true });
+
+  // Tự động kiểm tra và di chuyển dữ liệu phiên bản cũ (Migration)
+  try {
+    let legacyAccountsPath = '';
+    let legacyScorePath = '';
+    let legacyProfilePath = '';
+    let legacyConfigPath = '';
+
+    // 1. Kiểm tra thư mục local workspace trước (trong chế độ dev)
+    if (!app.isPackaged) {
+      const localAccounts = path.join(rootDir, 'data', 'accounts.json');
+      try {
+        await fs.access(localAccounts);
+        legacyAccountsPath = localAccounts;
+        legacyScorePath = path.join(rootDir, 'data', 'vote-score-history.csv');
+        legacyProfilePath = path.join(rootDir, '.cloakbrowser-profile');
+        legacyConfigPath = path.join(rootDir, 'vote-assist.config.json');
+      } catch {}
+    }
+
+    // 2. Nếu không có hoặc đang chạy app build, quét thư mục userData
+    if (!legacyAccountsPath) {
+      const packagedAccounts = path.join(runtimeDir, 'data', 'accounts.json');
+      try {
+        await fs.access(packagedAccounts);
+        legacyAccountsPath = packagedAccounts;
+        legacyScorePath = path.join(runtimeDir, 'data', 'vote-score-history.csv');
+        legacyProfilePath = path.join(runtimeDir, '.cloakbrowser-profile');
+        legacyConfigPath = path.join(runtimeDir, 'vote-assist.config.json');
+      } catch {}
+    }
+
+    if (legacyAccountsPath) {
+      const settings = await loadGlobalSettings();
+      // Chỉ thực hiện di chuyển dữ liệu khi danh sách instances hiện tại đang rỗng
+      if (!settings.instances || settings.instances.length === 0) {
+        const legacyId = 'inst_legacy';
+        const legacyDir = path.join(runtimeDir, 'instances', legacyId);
+
+        await fs.mkdir(legacyDir, { recursive: true });
+        await fs.mkdir(path.join(legacyDir, 'data'), { recursive: true });
+
+        // Sao chép tài khoản
+        await fs.copyFile(legacyAccountsPath, path.join(legacyDir, 'data', 'accounts.json'));
+
+        // Sao chép lịch sử điểm vote nếu có
+        if (legacyScorePath) {
+          try {
+            await fs.access(legacyScorePath);
+            await fs.copyFile(legacyScorePath, path.join(legacyDir, 'data', 'vote-score-history.csv'));
+          } catch {}
+        }
+
+        // Sao chép Profile Cloakbrowser cũ nếu có (bỏ qua thông báo nếu không có)
+        if (legacyProfilePath) {
+          try {
+            await fs.access(legacyProfilePath);
+            await fs.cp(legacyProfilePath, path.join(legacyDir, '.cloakbrowser-profile'), { recursive: true });
+          } catch (err) {
+            if (err.code !== 'ENOENT') {
+              console.warn('Không thể sao chép profile cloakbrowser cũ:', err);
+            }
+          }
+        }
+
+        // Sao chép cấu hình cũ nếu có
+        if (legacyConfigPath) {
+          try {
+            await fs.access(legacyConfigPath);
+            await fs.copyFile(legacyConfigPath, path.join(legacyDir, 'vote-assist.config.json'));
+          } catch {
+            await fs.writeFile(
+              path.join(legacyDir, 'vote-assist.config.json'),
+              JSON.stringify({
+                freshProfilePerRun: true,
+                randomizeTempMail: true,
+                proxy: null
+              }, null, 2)
+            );
+          }
+        }
+
+        // Đăng ký luồng gốc vào danh sách quản lý
+        settings.instances = [{
+          id: legacyId,
+          name: 'Bản gốc (Legacy)',
+          proxy: '',
+          createdAt: new Date().toISOString()
+        }];
+        await saveGlobalSettings(settings);
+      }
+    }
+  } catch (error) {
+    console.error('Lỗi trong quá trình tự động migration dữ liệu cũ:', error);
+  }
 }
 
-function ensureWorkerReady() {
+function ensureSetupWorkerReady() {
   if (!setupPromise) {
     setupPromise = (async () => {
       send('setup-status', 'setupCheckingBrowser');
-      await runUtility(path.join(__dirname, 'setup-worker.cjs'));
+      // Chạy setup worker ở thư mục chính của app
+      const child = utilityProcess.fork(path.join(__dirname, 'setup-worker.cjs'), [], {
+        cwd: runtimeDir,
+        stdio: 'pipe'
+      });
+      child.stdout?.on('data', (data) => send('setup-status', 'browserDownloading'));
+      await new Promise((resolve, reject) => {
+        child.on('exit', (code) => code === 0 ? resolve() : reject(new Error('Setup failed')));
+      });
       send('setup-status', 'browserReady');
     })().finally(() => {
       setupPromise = null;
@@ -109,7 +214,36 @@ function ensureWorkerReady() {
   return setupPromise;
 }
 
-async function readScoreSummary() {
+// Cấu hình Global
+async function loadGlobalSettings() {
+  try {
+    const content = await fs.readFile(globalSettingsPath, 'utf8');
+    return JSON.parse(content);
+  } catch {
+    return { instances: [] };
+  }
+}
+
+async function saveGlobalSettings(settings) {
+  await fs.mkdir(runtimeDir, { recursive: true });
+  await fs.writeFile(globalSettingsPath, JSON.stringify(settings, null, 2));
+}
+
+// Cấu hình của từng Instance
+function getInstanceDir(instanceId) {
+  return path.join(runtimeDir, 'instances', instanceId);
+}
+
+function getAccountsPath(instanceId) {
+  return path.join(getInstanceDir(instanceId), 'data', 'accounts.json');
+}
+
+function getScorePath(instanceId) {
+  return path.join(getInstanceDir(instanceId), 'data', 'vote-score-history.csv');
+}
+
+async function readScoreSummary(instanceId) {
+  const scorePath = getScorePath(instanceId);
   try {
     const lines = (await fs.readFile(scorePath, 'utf8')).trim().split(/\r?\n/);
     const [latest] = lines.slice(1);
@@ -128,7 +262,8 @@ async function readScoreSummary() {
   }
 }
 
-async function readAccounts() {
+async function readAccounts(instanceId) {
+  const accountsPath = getAccountsPath(instanceId);
   try {
     return JSON.parse(await fs.readFile(accountsPath, 'utf8'));
   } catch {
@@ -136,10 +271,43 @@ async function readAccounts() {
   }
 }
 
-//
-async function saveAccounts(accounts) {
+async function saveAccounts(instanceId, accounts) {
+  const accountsPath = getAccountsPath(instanceId);
   await fs.mkdir(path.dirname(accountsPath), { recursive: true });
   await fs.writeFile(accountsPath, `${JSON.stringify(accounts, null, 2)}\n`);
+}
+
+function parseProxyString(proxyStr) {
+  if (!proxyStr || !proxyStr.trim()) return null;
+  let str = proxyStr.trim();
+  // Nếu không có scheme, mặc định là http://
+  if (!/^[a-zA-Z0-9]+:\/\//.test(str)) {
+    str = 'http://' + str;
+  }
+  try {
+    const url = new URL(str);
+    const proxyObj = {
+      server: `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`
+    };
+    if (url.username) proxyObj.username = url.username;
+    if (url.password) proxyObj.password = url.password;
+    return proxyObj;
+  } catch {
+    return { server: proxyStr.trim() };
+  }
+}
+
+function formatProxyObjToString(proxyObj) {
+  if (!proxyObj || !proxyObj.server) return '';
+  let str = proxyObj.server;
+  if (proxyObj.username && proxyObj.password) {
+    // Chèn user:pass vào sau protocol
+    const match = str.match(/^([a-zA-Z0-9]+:\/\/)(.+)$/);
+    if (match) {
+      str = `${match[1]}${proxyObj.username}:${proxyObj.password}@${match[2]}`;
+    }
+  }
+  return str;
 }
 
 function normalizeHeader(value) {
@@ -218,46 +386,178 @@ function importedAccountFromRow(row, importedAt) {
     lastError: ''
   };
 }
-//
+
+// --- IPC HANDLERS ---
 
 ipcMain.handle('setup:first-run', async () => {
   send('setup-status', 'setupPreparingData');
   await ensureRuntimeDirs();
+  await ensureSetupWorkerReady();
   send('setup-status', 'setupDone');
   return true;
 });
 
-ipcMain.handle('data:summary', async () => readScoreSummary());
-ipcMain.handle('data:accounts', async () => readAccounts());
+// Quản lý Instance
+ipcMain.handle('instances:list', async () => {
+  const settings = await loadGlobalSettings();
+  const list = settings.instances || [];
 
-ipcMain.handle('run:start', async (_event, mode, options = {}) => {
-  if (activeWorker) throw new Error('Đang có tiến trình chạy.');
+  // Bổ sung thông tin trạng thái chạy động và thống kê vote
+  const result = await Promise.all(list.map(async (inst) => {
+    const running = activeWorkers.has(inst.id);
+    const accounts = await readAccounts(inst.id);
+    const summary = await readScoreSummary(inst.id);
+
+    const votedTodayCount = accounts.filter(acc => {
+      if (!acc.lastVotedAt) return false;
+      const date = new Date(acc.lastVotedAt);
+      const today = new Date();
+      return date.getFullYear() === today.getFullYear() &&
+             date.getMonth() === today.getMonth() &&
+             date.getDate() === today.getDate();
+    }).length;
+
+    return {
+      ...inst,
+      running,
+      totalAccounts: accounts.length,
+      votedTodayCount,
+      latestScore: summary.latest
+    };
+  }));
+
+  return result;
+});
+
+ipcMain.handle('instances:create', async (_event, name, proxyStr = '') => {
+  const settings = await loadGlobalSettings();
+  const instanceId = 'inst_' + Date.now();
+  const instanceDir = getInstanceDir(instanceId);
+
+  await fs.mkdir(instanceDir, { recursive: true });
+  await fs.mkdir(path.join(instanceDir, 'data'), { recursive: true });
+  await fs.mkdir(path.join(instanceDir, 'logs'), { recursive: true });
+
+  const proxyObj = parseProxyString(proxyStr);
+  const configContent = {
+    freshProfilePerRun: true,
+    randomizeTempMail: true,
+    proxy: proxyObj
+  };
+
+  await fs.writeFile(
+    path.join(instanceDir, 'vote-assist.config.json'),
+    JSON.stringify(configContent, null, 2)
+  );
+
+  const newInst = {
+    id: instanceId,
+    name: name || `Luồng ${settings.instances.length + 1}`,
+    proxy: proxyStr || '',
+    createdAt: new Date().toISOString()
+  };
+
+  settings.instances.push(newInst);
+  await saveGlobalSettings(settings);
+
+  send('instances-updated');
+  return newInst;
+});
+
+ipcMain.handle('instances:delete', async (_event, instanceId) => {
+  // Nếu đang chạy thì bắt buộc stop trước
+  if (activeWorkers.has(instanceId)) {
+    const child = activeWorkers.get(instanceId);
+    child.kill();
+    activeWorkers.delete(instanceId);
+  }
+
+  const settings = await loadGlobalSettings();
+  settings.instances = settings.instances.filter(inst => inst.id !== instanceId);
+  await saveGlobalSettings(settings);
+
+  const instanceDir = getInstanceDir(instanceId);
+  await fs.rm(instanceDir, { recursive: true, force: true }).catch(() => {});
+
+  send('instances-updated');
+  return true;
+});
+
+ipcMain.handle('instances:update-config', async (_event, instanceId, name, proxyStr) => {
+  const settings = await loadGlobalSettings();
+  const inst = settings.instances.find(i => i.id === instanceId);
+  if (!inst) throw new Error('Không tìm thấy instance');
+
+  inst.name = name || inst.name;
+  inst.proxy = proxyStr;
+
+  await saveGlobalSettings(settings);
+
+  // Ghi đè config json của instance
+  const instanceDir = getInstanceDir(instanceId);
+  const configPath = path.join(instanceDir, 'vote-assist.config.json');
+  let configContent = {};
+  try {
+    configContent = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  } catch {}
+
+  configContent.proxy = parseProxyString(proxyStr);
+  await fs.mkdir(instanceDir, { recursive: true });
+  await fs.writeFile(configPath, JSON.stringify(configContent, null, 2));
+
+  send('instances-updated');
+  return true;
+});
+
+// Điều khiển tiến trình của Instance
+ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {}) => {
+  if (activeWorkers.has(instanceId)) throw new Error('Phiên bản này đang chạy.');
+
+  const settings = await loadGlobalSettings();
+  const inst = settings.instances.find(i => i.id === instanceId);
+  const instanceName = inst ? inst.name : '';
+
   const command = mode === 'login' ? 'login' : 'signup';
   const runnerArgs = [command];
   if (command === 'signup' && options.count) {
     runnerArgs.push(String(options.count));
   }
-  await ensureRuntimeDirs();
-  send('run-state', { running: true, mode: command });
+
+  const instanceDir = getInstanceDir(instanceId);
+  await fs.mkdir(path.join(instanceDir, 'data'), { recursive: true });
+  await fs.mkdir(path.join(instanceDir, 'logs'), { recursive: true });
+
+  send('run-state', { instanceId, running: true, mode: command });
+
   try {
-    await ensureWorkerReady();
-    await runUtility(path.join(__dirname, 'runner.cjs'), runnerArgs);
+    await ensureSetupWorkerReady();
+    await runUtility(
+      path.join(__dirname, 'runner.cjs'),
+      runnerArgs,
+      instanceDir,
+      instanceId,
+      instanceName
+    );
   } finally {
-    send('data-updated');
-    send('run-state', { running: false, mode: command });
+    send('data-updated', { instanceId });
+    send('run-state', { instanceId, running: false, mode: command });
   }
 });
 
-ipcMain.handle('run:stop', async () => {
-  if (!activeWorker) return false;
-  activeWorker.kill();
-  activeWorker = null;
-  send('run-state', { running: false });
+ipcMain.handle('instances:stop', async (_event, instanceId) => {
+  if (!activeWorkers.has(instanceId)) return false;
+  const child = activeWorkers.get(instanceId);
+  child.kill();
+  activeWorkers.delete(instanceId);
+  send('run-state', { instanceId, running: false });
   return true;
 });
 
-//
-ipcMain.handle('accounts:import', async () => {
+// Đọc ghi dữ liệu theo Instance
+ipcMain.handle('instances:get-summary', async (_event, instanceId) => readScoreSummary(instanceId));
+ipcMain.handle('instances:get-accounts', async (_event, instanceId) => readAccounts(instanceId));
+
+ipcMain.handle('instances:import-accounts', async (_event, instanceId) => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Import accounts from Excel',
     filters: [
@@ -276,7 +576,7 @@ ipcMain.handle('accounts:import', async () => {
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
   const importedAt = new Date();
-  const accounts = await readAccounts();
+  const accounts = await readAccounts(instanceId);
   const byEmail = new Map(accounts.map((account) => [String(account.email || '').toLowerCase(), account]));
 
   let created = 0;
@@ -311,8 +611,8 @@ ipcMain.handle('accounts:import', async () => {
     }
   }
 
-  await saveAccounts(accounts);
-  send('data-updated');
+  await saveAccounts(instanceId, accounts);
+  send('data-updated', { instanceId });
 
   return {
     cancelled: false,
@@ -321,15 +621,14 @@ ipcMain.handle('accounts:import', async () => {
     skipped
   };
 });
-//
-//
-ipcMain.handle('accounts:mark-voted-today', async (_event, email) => {
+
+ipcMain.handle('instances:mark-voted', async (_event, instanceId, email) => {
   const targetEmail = String(email || '').trim().toLowerCase();
   if (!targetEmail) {
     throw new Error('Missing account email');
   }
 
-  const accounts = await readAccounts();
+  const accounts = await readAccounts(instanceId);
   const account = accounts.find((entry) => String(entry.email || '').trim().toLowerCase() === targetEmail);
 
   if (!account) {
@@ -340,16 +639,16 @@ ipcMain.handle('accounts:mark-voted-today', async (_event, email) => {
   account.status = account.status || 'active';
   account.lastError = '';
 
-  await saveAccounts(accounts);
-  send('data-updated');
+  await saveAccounts(instanceId, accounts);
+  send('data-updated', { instanceId });
 
   return {
     ok: true,
     account
   };
 });
-//
-ipcMain.handle('accounts:download-template', async (_event, language = 'vi') => {
+
+ipcMain.handle('instances:download-template', async (_event, language = 'vi') => {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Save account import template',
     defaultPath: 'bugs-accounts-template.xlsx',
@@ -426,7 +725,6 @@ ipcMain.handle('accounts:download-template', async (_event, language = 'vi') => 
   ];
 
   XLSX.utils.book_append_sheet(workbook, sheet, 'accounts');
-
   XLSX.writeFile(workbook, result.filePath);
 
   return {
@@ -434,7 +732,6 @@ ipcMain.handle('accounts:download-template', async (_event, language = 'vi') => 
     filePath: result.filePath
   };
 });
-//
 
 app.whenReady().then(createWindow);
 

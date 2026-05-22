@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tian Xiwei Vote Assist</title>
+  <title>Tian Xiwei Vote Assist - Multi-Instance</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 
@@ -22,7 +22,11 @@
   </section>
 
   <main id="app" class="app hidden">
+    <!-- Topbar -->
     <header class="topbar">
+      <div class="logoBand">
+        <span class="logoText">Tian Xiwei Vote Assist <span class="badge">Multi-Instance</span></span>
+      </div>
       <div class="topActions">
         <select id="languageSelect" class="languageSelect" aria-label="Language">
           <option value="vi">Tiếng Việt</option>
@@ -32,60 +36,125 @@
         </select>
 
         <button class="helpButton dark" id="helpButtonMain" data-i18n="help">Hướng dẫn sử dụng</button>
-        <button class="helpButton dark" id="historyButton" data-i18n="history">Lịch sử điểm vote</button>
       </div>
     </header>
 
-    <section class="scoreBand">
-      <div>
-        <span class="label" data-i18n="tianXiwei">TIAN Xiwei</span>
-        <strong id="tianVotes">-</strong>
-      </div>
-      <div>
-        <span class="label" data-i18n="top1">Top 1</span>
-        <strong id="topVotes">-</strong>
-      </div>
-      <div>
-        <span class="label" data-i18n="gap">Chênh lệch</span>
-        <strong id="gapVotes">-</strong>
-      </div>
-      <div class="updatedAt">
-        <span class="label" data-i18n="updatedAt">Cập nhật gần nhất</span>
-        <strong id="updatedAt">-</strong>
-      </div>
-    </section>
-    <div class="emptyScoreHint" id="emptyScoreHint" data-i18n="emptyScoreHint">Chạy tool lần đầu để cập nhật chỉ số
-      vote.</div>
+    <!-- Main Workspace -->
+    <div class="workspace">
+      <!-- Left Panel: Instances Manager -->
+      <section class="leftPanel">
+        <div class="panelHeaderBar">
+          <h2 data-i18n="instancesTitle">Danh sách phiên bản</h2>
+          <button class="primaryAction btnAddInstance" id="addInstanceButton">
+            <span data-i18n="addInstance">+ Thêm phiên bản</span>
+          </button>
+        </div>
 
-    <section class="actions">
-      <button class="primaryAction" id="signupButton">
-        <span data-i18n="signup">Đăng ký mới và Vote</span>
-        <small data-i18n="signupHint">Chạy liên tục đến khi bấm Dừng</small>
-      </button>
-      <div class="accountAction">
-        <button class="primaryAction secondary" id="loginButton">
-          <span data-i18n="loginVote">Vote bằng tài khoản cũ</span>
-          <small data-i18n="loginVoteHint">Chỉ chạy account chưa vote hôm nay</small>
-        </button>
-        <button class="miniButton" id="accountsButton" data-i18n="accounts">Danh sách tài khoản</button>
-        <button class="miniButton" id="importAccountsButton" data-i18n="importAccounts"
-          data-i18n-title="importAccountsHint" title="Import tài khoản Bugs bằng file Excel 3 cột.">
-          Import Excel
-        </button>
-        <button class="miniButton" id="downloadTemplateButton" data-i18n="downloadTemplate"
-          data-i18n-title="downloadTemplateHint" title="Tải file Excel mẫu để nhập tài khoản Bugs.">
-          Tải template
-        </button>
-      </div>
-      <button class="stopButton hidden" id="stopButton" data-i18n="stop">Dừng</button>
-    </section>
+        <div class="globalInstanceControls">
+          <button class="controlBtn runAll" id="runAllSignupButton" data-i18n="runAllSignup">Chạy Signup tất cả</button>
+          <button class="controlBtn runAll" id="runAllLoginButton" data-i18n="runAllLogin">Chạy Login tất cả</button>
+          <button class="controlBtn stopAll" id="stopAllButton" data-i18n="stopAll">Dừng tất cả</button>
+        </div>
 
-    <section class="logPanel">
-      <div class="panelHeader" data-i18n="logTitle">Nhật ký chạy</div>
-      <pre id="logOutput"></pre>
-    </section>
+        <div class="instancesListContainer">
+          <table class="instancesTable">
+            <thead>
+              <tr>
+                <th data-i18n="instanceName">Tên phiên bản</th>
+                <th data-i18n="proxy">Proxy</th>
+                <th><span data-i18n="votedToday">Đã vote</span> / <span data-i18n="totalAccs">Tổng acc</span></th>
+                <th data-i18n="status">Trạng thái</th>
+                <th data-i18n="actions" class="textCenter">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="instancesTableBody">
+              <!-- Load dynamic instances here -->
+            </tbody>
+          </table>
+          <div class="noInstancesHint hidden" id="noInstancesHint" data-i18n="noInstances">
+            Chưa có phiên bản nào. Hãy bấm "Thêm phiên bản" để bắt đầu.
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Selected Instance Dashboard -->
+      <section class="rightPanel">
+        <div class="emptySelection" id="emptySelection">
+          <div class="hintCard">
+            <div class="hintIcon">⚡</div>
+            <p data-i18n="selectInstanceHint">Chọn một phiên bản bên trái để quản lý và xem logs.</p>
+          </div>
+        </div>
+
+        <div class="instanceDashboard hidden" id="instanceDashboard">
+          <!-- Header of selected instance -->
+          <div class="selectedInstanceHeader">
+            <h2 id="selectedInstanceName">Instance 01</h2>
+            <div class="instanceMetaInfo">
+              <span class="metaItem">Proxy: <strong id="selectedInstanceProxy">-</strong></span>
+            </div>
+          </div>
+
+          <!-- Score band of selected instance -->
+          <section class="scoreBand">
+            <div>
+              <span class="label" data-i18n="tianXiwei">TIAN Xiwei</span>
+              <strong id="tianVotes">-</strong>
+            </div>
+            <div>
+              <span class="label" data-i18n="top1">Top 1</span>
+              <strong id="topVotes">-</strong>
+            </div>
+            <div>
+              <span class="label" data-i18n="gap">Chênh lệch</span>
+              <strong id="gapVotes">-</strong>
+            </div>
+            <div class="updatedAt">
+              <span class="label" data-i18n="updatedAt">Cập nhật gần nhất</span>
+              <strong id="updatedAt">-</strong>
+            </div>
+          </section>
+          <div class="emptyScoreHint" id="emptyScoreHint" data-i18n="emptyScoreHint">
+            Chạy tool lần đầu để cập nhật chỉ số vote.
+          </div>
+
+          <!-- Actions specifically for selected instance -->
+          <section class="instanceActions">
+            <div class="actionGroup">
+              <button class="primaryAction" id="signupButton">
+                <span data-i18n="signup">Đăng ký mới và Vote</span>
+                <small data-i18n="signupHint">Chạy liên tục đến khi bấm Dừng</small>
+              </button>
+              <button class="primaryAction secondary" id="loginButton">
+                <span data-i18n="loginVote">Vote bằng tài khoản cũ</span>
+                <small data-i18n="loginVoteHint">Chỉ chạy account chưa vote hôm nay</small>
+              </button>
+            </div>
+            <div class="dataGroup">
+              <button class="miniButton" id="accountsButton" data-i18n="accounts">Danh sách tài khoản</button>
+              <button class="miniButton" id="importAccountsButton" data-i18n="importAccounts" data-i18n-title="importAccountsHint" title="Import tài khoản Bugs bằng file Excel 3 cột.">
+                Import Excel
+              </button>
+              <button class="miniButton" id="downloadTemplateButton" data-i18n="downloadTemplate" data-i18n-title="downloadTemplateHint" title="Tải file Excel mẫu để nhập tài khoản Bugs.">
+                Tải template
+              </button>
+              <button class="miniButton dark" id="historyButton" data-i18n="history">Lịch sử điểm vote</button>
+            </div>
+          </section>
+
+          <!-- Selected Instance Log Panel -->
+          <section class="logPanel">
+            <div class="panelHeader" data-i18n="logTitle">Nhật ký chạy</div>
+            <pre id="logOutput"></pre>
+          </section>
+        </div>
+      </section>
+    </div>
   </main>
 
+  <!-- Modals and Dialogs -->
+  
+  <!-- Info/Table Modal -->
   <dialog id="modal">
     <div class="modalHeader">
       <strong id="modalTitle">Thông tin</strong>
@@ -94,6 +163,7 @@
     <div id="modalBody"></div>
   </dialog>
 
+  <!-- Signup Count Dialog -->
   <dialog id="countDialog">
     <div class="modalHeader">
       <strong data-i18n="signupCountTitle">Đăng ký mới và Vote</strong>
@@ -104,6 +174,27 @@
       <input id="signupCountInput" type="number" min="1" step="1" value="1">
       <div class="countDialogActions">
         <button id="confirmCountDialog" data-i18n="start">Bắt đầu</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Create/Edit Instance Dialog -->
+  <dialog id="instanceFormDialog">
+    <div class="modalHeader">
+      <strong id="instanceFormTitle" data-i18n="createInstanceTitle">Tạo phiên bản mới</strong>
+      <button id="closeInstanceFormDialog" data-i18n="close">Đóng</button>
+    </div>
+    <div class="countDialogBody">
+      <div class="formField">
+        <label for="instanceNameInput" data-i18n="createInstanceName">Tên phiên bản:</label>
+        <input id="instanceNameInput" type="text" placeholder="Luồng 01">
+      </div>
+      <div class="formField">
+        <label for="instanceProxyInput" data-i18n="createInstanceProxy">Proxy (ip:port hoặc user:pass@ip:port):</label>
+        <input id="instanceProxyInput" type="text" placeholder="http://username:password@ip:port">
+      </div>
+      <div class="countDialogActions">
+        <button id="confirmInstanceFormDialog" data-i18n="save">Lưu</button>
       </div>
     </div>
   </dialog>

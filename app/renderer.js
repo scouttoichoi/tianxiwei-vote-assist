@@ -1,17 +1,19 @@
 const splash = document.getElementById('splash');
 const appRoot = document.getElementById('app');
 const setupStatus = document.getElementById('setupStatus');
+const languageSelect = document.getElementById('languageSelect');
+
+// Selected Instance DOMs
+const selectedInstanceName = document.getElementById('selectedInstanceName');
+const selectedInstanceProxy = document.getElementById('selectedInstanceProxy');
 const tianVotes = document.getElementById('tianVotes');
 const topVotes = document.getElementById('topVotes');
 const gapVotes = document.getElementById('gapVotes');
 const updatedAt = document.getElementById('updatedAt');
 const emptyScoreHint = document.getElementById('emptyScoreHint');
 const logOutput = document.getElementById('logOutput');
-const signupButton = document.getElementById('signupButton');
-const loginButton = document.getElementById('loginButton');
-const stopButton = document.getElementById('stopButton');
-const historyButton = document.getElementById('historyButton');
-const accountsButton = document.getElementById('accountsButton');
+
+// Dialog & Modal DOMs
 const modal = document.getElementById('modal');
 const modalTitle = document.getElementById('modalTitle');
 const modalBody = document.getElementById('modalBody');
@@ -19,11 +21,37 @@ const countDialog = document.getElementById('countDialog');
 const signupCountInput = document.getElementById('signupCountInput');
 const confirmCountDialog = document.getElementById('confirmCountDialog');
 const closeCountDialog = document.getElementById('closeCountDialog');
-const languageSelect = document.getElementById('languageSelect');//
-const importAccountsButton = document.getElementById('importAccountsButton');//
-const downloadTemplateButton = document.getElementById('downloadTemplateButton');//
 
+// Instance Form DOMs
+const instanceFormDialog = document.getElementById('instanceFormDialog');
+const instanceFormTitle = document.getElementById('instanceFormTitle');
+const instanceNameInput = document.getElementById('instanceNameInput');
+const instanceProxyInput = document.getElementById('instanceProxyInput');
+const confirmInstanceFormDialog = document.getElementById('confirmInstanceFormDialog');
+const closeInstanceFormDialog = document.getElementById('closeInstanceFormDialog');
+
+// Action Buttons
+const signupButton = document.getElementById('signupButton');
+const loginButton = document.getElementById('loginButton');
+const accountsButton = document.getElementById('accountsButton');
+const importAccountsButton = document.getElementById('importAccountsButton');
+const downloadTemplateButton = document.getElementById('downloadTemplateButton');
+const historyButton = document.getElementById('historyButton');
+const helpButtonMain = document.getElementById('helpButtonMain');
+const helpButton = document.getElementById('helpButton');
+
+// Global controls
+const addInstanceButton = document.getElementById('addInstanceButton');
+const runAllSignupButton = document.getElementById('runAllSignupButton');
+const runAllLoginButton = document.getElementById('runAllLoginButton');
+const stopAllButton = document.getElementById('stopAllButton');
+
+// Global states
 let currentLanguage = localStorage.getItem('language') || 'vi';
+let instances = [];
+let selectedInstanceId = null;
+const instanceLogs = new Map(); // key: instanceId, value: logText
+let editingInstanceId = null; // null if creating, string id if editing
 
 function t(key) {
   return window.I18N?.[currentLanguage]?.[key] || window.I18N?.en?.[key] || key;
@@ -46,11 +74,14 @@ function applyLanguage(language) {
     languageSelect.value = language;
   }
 
-  const idleTexts = Object.values(window.I18N).map((languagePack) => languagePack.idleLog);
-  const currentLog = logOutput.textContent.trim();
-
-  if (idleTexts.includes(currentLog)) {
-    logOutput.textContent = t('idleLog');
+  // Refresh instances to translate dynamic status badges
+  renderInstancesList();
+  
+  if (selectedInstanceId) {
+    const log = instanceLogs.get(selectedInstanceId) || '';
+    if (!log.trim()) {
+      logOutput.textContent = t('idleLog');
+    }
   }
 }
 
@@ -99,37 +130,15 @@ function formatDateTimeStack(value) {
   return `${timeFormat.format(date)}\n${dateFormat.format(date)}`;
 }
 
-function appendLog(text) {
-  logOutput.textContent += text;
-  logOutput.scrollTop = logOutput.scrollHeight;
-}
+function appendInstanceLog(instanceId, text) {
+  const currentLog = instanceLogs.get(instanceId) || '';
+  const nextLog = currentLog + text;
+  instanceLogs.set(instanceId, nextLog);
 
-function setIdleLog() {
-  if (!logOutput.textContent.trim()) {
-    logOutput.textContent = t('idleLog');
+  if (selectedInstanceId === instanceId) {
+    logOutput.textContent = nextLog;
+    logOutput.scrollTop = logOutput.scrollHeight;
   }
-}
-
-function setRunning(running, mode) {
-  signupButton.disabled = running;
-  loginButton.disabled = running;
-  stopButton.classList.toggle('hidden', !running);
-  if (running && !logOutput.textContent.trim()) {
-    appendLog(`${mode === 'login' ? t('runningLogin') : t('runningSignup')}\n`);
-  }
-  if (!running) setIdleLog();
-}
-
-async function refreshSummary() {
-  const summary = await window.txw.getSummary();
-  const latest = summary.latest;
-  tianVotes.textContent = formatVote(latest?.tianXiweiVotes);
-  topVotes.textContent = formatVote(latest?.top1Votes);
-  const gap = latest ? latest.tianXiweiVotes - latest.top1Votes : 0;
-  gapVotes.textContent = latest ? numberFormat.format(gap) : '-';
-  updatedAt.textContent = formatDateTimeStack(latest?.checkedAt);
-  emptyScoreHint.classList.toggle('hidden', Boolean(latest));
-  return summary;
 }
 
 function openModal(title, html) {
@@ -138,54 +147,299 @@ function openModal(title, html) {
   modal.showModal();
 }
 
-async function showHistory() {
-  const summary = await window.txw.getSummary();
-  const rows = summary.history.map((row) => `
-    <tr>
-      <td>${formatDateTime(row.checkedAt)}</td>
-      <td>${formatVote(row.tianXiweiVotes)}</td>
-      <td>${formatVote(row.top1Votes)}</td>
-    </tr>
-  `).join('');
+// Render Instance List Table
+function renderInstancesList() {
+  const tbody = document.getElementById('instancesTableBody');
+  const noInstancesHint = document.getElementById('noInstancesHint');
+  tbody.innerHTML = '';
 
-  openModal(t('historyTitle'), `
-    <table>
-      <thead>
-        <tr>
-          <th>${t('time')}</th>
-          <th>${t('tianXiwei')}</th>
-          <th>${t('top1')}</th>
-        </tr>
-      </thead>
-      <tbody>${rows || `<tr><td colspan="3">${t('noHistory')}</td></tr>`}</tbody>
-    </table>
-  `);
+  if (instances.length === 0) {
+    noInstancesHint.classList.remove('hidden');
+    return;
+  }
+  noInstancesHint.classList.add('hidden');
+
+  instances.forEach((inst) => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = inst.id;
+    if (inst.id === selectedInstanceId) {
+      tr.classList.add('is-selected');
+    }
+    if (inst.running) {
+      tr.classList.add('is-running');
+    }
+
+    // Determine badge status
+    let statusClass = 'idle';
+    let statusText = t('idle');
+    const log = instanceLogs.get(inst.id) || '';
+    if (inst.running) {
+      statusClass = 'running';
+      statusText = t('running');
+      if (/Vui lòng nhập captcha/i.test(log) || /captcha/i.test(log)) {
+        statusClass = 'waitingCaptcha';
+        statusText = t('waitingCaptcha');
+      }
+    }
+
+    const proxyStr = inst.proxy ? inst.proxy.replace(/^[a-zA-Z0-9]+:\/\//, '') : '-';
+
+    tr.innerHTML = `
+      <td><strong>${inst.name}</strong></td>
+      <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${proxyStr}</td>
+      <td class="textCenter">${inst.votedTodayCount} / ${inst.totalAccounts}</td>
+      <td class="textCenter">
+        <span class="badgeStatus ${statusClass}">${statusText}</span>
+      </td>
+      <td class="textCenter">
+        <div class="rowActions" onclick="event.stopPropagation()">
+          ${inst.running ?
+            `<button class="btnRowStop" data-action="stop" title="${t('stop')}">⏹</button>` :
+            ''
+          }
+          <button class="btnRowEdit" data-action="edit" title="${t('edit')}">✏️</button>
+          <button class="btnRowDelete" data-action="delete" title="${t('delete')}">🗑</button>
+        </div>
+      </td>
+    `;
+
+    tr.addEventListener('click', () => selectInstance(inst.id));
+
+    // Event listeners inside the row actions
+    tr.querySelectorAll('.rowActions button').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        handleRowAction(inst.id, action);
+      });
+    });
+
+    tbody.appendChild(tr);
+  });
 }
 
+// Refresh Instances List from main.cjs
+async function refreshInstances() {
+  instances = await window.txw.getInstances();
+  renderInstancesList();
+
+  if (selectedInstanceId) {
+    const selected = instances.find((inst) => inst.id === selectedInstanceId);
+    if (selected) {
+      updateSelectedInstanceDashboard(selected);
+    } else {
+      selectedInstanceId = null;
+      showEmptySelection();
+    }
+  }
+}
+
+function showEmptySelection() {
+  document.getElementById('emptySelection').classList.remove('hidden');
+  document.getElementById('instanceDashboard').classList.add('hidden');
+}
+
+// Select specific instance
+async function selectInstance(id) {
+  selectedInstanceId = id;
+  const selected = instances.find((inst) => inst.id === id);
+  if (!selected) return;
+
+  // Visual selection feedback
+  document.querySelectorAll('#instancesTableBody tr').forEach((tr) => {
+    tr.classList.toggle('is-selected', tr.dataset.id === id);
+  });
+
+  document.getElementById('emptySelection').classList.add('hidden');
+  document.getElementById('instanceDashboard').classList.remove('hidden');
+
+  updateSelectedInstanceDashboard(selected);
+}
+
+// Update Active Instance Details
+async function updateSelectedInstanceDashboard(inst) {
+  selectedInstanceName.textContent = inst.name;
+  selectedInstanceProxy.textContent = inst.proxy || '-';
+
+  // Load vote summary for this instance
+  const summary = await window.txw.getInstanceSummary(inst.id);
+  const latest = summary.latest;
+  tianVotes.textContent = formatVote(latest?.tianXiweiVotes);
+  topVotes.textContent = formatVote(latest?.top1Votes);
+  const gap = latest ? latest.tianXiweiVotes - latest.top1Votes : 0;
+  gapVotes.textContent = latest ? numberFormat.format(gap) : '-';
+  updatedAt.textContent = formatDateTimeStack(latest?.checkedAt);
+  emptyScoreHint.classList.toggle('hidden', Boolean(latest));
+
+  // Load log text
+  const log = instanceLogs.get(inst.id) || '';
+  logOutput.textContent = log || t('idleLog');
+  logOutput.scrollTop = logOutput.scrollHeight;
+}
+
+// Handle instance table action button clicks
+async function handleRowAction(instanceId, action) {
+  const inst = instances.find((i) => i.id === instanceId);
+  if (!inst) return;
+
+  if (action === 'start-signup') {
+    startInstanceProcess(instanceId, 'signup');
+  } else if (action === 'start-login') {
+    startInstanceProcess(instanceId, 'login');
+  } else if (action === 'stop') {
+    await window.txw.stopInstance(instanceId);
+  } else if (action === 'edit') {
+    openInstanceForm(instanceId);
+  } else if (action === 'delete') {
+    const confirmMsg = t('confirmDeleteInstance').replace('{name}', inst.name);
+    if (window.confirm(confirmMsg)) {
+      await window.txw.deleteInstance(instanceId);
+    }
+  }
+}
+
+// Open Instance edit/create form
+function openInstanceForm(instanceId = null) {
+  editingInstanceId = instanceId;
+  if (instanceId) {
+    const inst = instances.find((i) => i.id === instanceId);
+    instanceFormTitle.textContent = t('editInstanceTitle');
+    instanceNameInput.value = inst.name;
+    instanceProxyInput.value = inst.proxy;
+  } else {
+    instanceFormTitle.textContent = t('createInstanceTitle');
+    instanceNameInput.value = '';
+    instanceProxyInput.value = '';
+  }
+  instanceFormDialog.showModal();
+}
+
+// Save Instance form
+async function saveInstanceForm() {
+  const name = instanceNameInput.value.trim();
+  const proxy = instanceProxyInput.value.trim();
+
+  if (editingInstanceId) {
+    await window.txw.updateInstance(editingInstanceId, name, proxy);
+  } else {
+    await window.txw.createInstance(name, proxy);
+  }
+
+  instanceFormDialog.close();
+}
+
+// Start specific instance process
+async function startInstanceProcess(instanceId, mode) {
+  let options = {};
+  if (mode === 'signup') {
+    const count = await requestSignupCount();
+    if (count === null) return;
+    if (!Number.isInteger(count) || count < 1) {
+      openModal(t('invalidCountTitle'), `<p>${t('invalidCountMessage')}</p>`);
+      return;
+    }
+    options.count = count;
+  }
+
+  // Clear previous log for clean start
+  instanceLogs.set(instanceId, '');
+  if (selectedInstanceId === instanceId) {
+    logOutput.textContent = '';
+  }
+
+  appendInstanceLog(instanceId, `${mode === 'login' ? t('runningLogin') : t('runningSignup')}\n`);
+  
+  try {
+    // Select this instance so the user can watch the logs
+    selectInstance(instanceId);
+    await window.txw.startInstance(instanceId, mode, options);
+  } catch (error) {
+    appendInstanceLog(instanceId, `\n${error.message || error}\n`);
+  } finally {
+    await refreshInstances();
+  }
+}
+
+function requestSignupCount() {
+  signupCountInput.value = '1';
+  countDialog.showModal();
+  signupCountInput.focus();
+  signupCountInput.select();
+
+  return new Promise((resolve) => {
+    let wrappedConfirm;
+    let wrappedClose;
+    let onKeyDown;
+
+    const cleanup = () => {
+      confirmCountDialog.removeEventListener('click', wrappedConfirm);
+      closeCountDialog.removeEventListener('click', wrappedClose);
+      countDialog.removeEventListener('cancel', wrappedClose);
+      signupCountInput.removeEventListener('keydown', onKeyDown);
+    };
+
+    const onConfirm = () => {
+      const count = Number(signupCountInput.value);
+      countDialog.close();
+      cleanup();
+      resolve(count);
+    };
+
+    const onClose = () => {
+      countDialog.close();
+      cleanup();
+      resolve(null);
+    };
+
+    onKeyDown = (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        wrappedConfirm();
+      }
+    };
+
+    wrappedClose = () => {
+      onClose();
+    };
+
+    wrappedConfirm = () => {
+      onConfirm();
+    };
+
+    signupCountInput.addEventListener('keydown', onKeyDown);
+    confirmCountDialog.addEventListener('click', wrappedConfirm, { once: true });
+    closeCountDialog.addEventListener('click', wrappedClose, { once: true });
+    countDialog.addEventListener('cancel', wrappedClose, { once: true });
+  });
+}
+
+// Show Vote Account Tables
 async function showAccounts() {
-  const accounts = await window.txw.getAccounts();
+  if (!selectedInstanceId) return;
+
+  const accounts = await window.txw.getInstanceAccounts(selectedInstanceId);
   const activeAccounts = accounts.filter((account) => (account.status || '').toLowerCase() === 'active');
   const deactiveAccounts = accounts.filter((account) => (account.status || '').toLowerCase() === 'deactive');
   const totalVotes = accounts.reduce((sum, account) => sum + normalizeVoteCount(account.lastVoteCount), 0);
 
   const renderRows = (items) => items.map((account) => `
-  <tr>
-    <td>${account.email || '-'}</td>
-    <td>${account.password || '-'}</td>
-    <td>${formatDateTime(account.lastVotedAt)}</td>
-    <td>${numberFormat.format(normalizeVoteCount(account.lastVoteCount))}</td>
-    <td>${account.lastError || ''}</td>
-    <td>
-      <button
-        type="button"
-        class="miniButton"
-        data-mark-voted-email="${account.email || ''}"
-      >
-        ${t('markVotedToday')}
-      </button>
-    </td>
-  </tr>
-`).join('');
+    <tr>
+      <td>${account.email || '-'}</td>
+      <td>${account.password || '-'}</td>
+      <td>${formatDateTime(account.lastVotedAt)}</td>
+      <td>${numberFormat.format(normalizeVoteCount(account.lastVoteCount))}</td>
+      <td>${account.lastError || ''}</td>
+      <td>
+        <button
+          type="button"
+          class="miniButton"
+          data-mark-voted-email="${account.email || ''}"
+        >
+          ${t('markVotedToday')}
+        </button>
+      </td>
+    </tr>
+  `).join('');
 
   openModal(t('accountsTitle'), `
     <div class="accountsSummary">
@@ -247,6 +501,8 @@ async function showAccounts() {
 
   const triggers = [...modalBody.querySelectorAll('[data-tab-trigger]')];
   const panels = [...modalBody.querySelectorAll('[data-tab-panel]')];
+  const markButtons = [...modalBody.querySelectorAll('[data-mark-voted-email]')];
+
   const activateTab = (tabName) => {
     for (const trigger of triggers) {
       trigger.classList.toggle('is-active', trigger.dataset.tabTrigger === tabName);
@@ -255,22 +511,49 @@ async function showAccounts() {
       panel.classList.toggle('is-active', panel.dataset.tabPanel === tabName);
     }
   };
-//
+
   for (const trigger of triggers) {
     trigger.addEventListener('click', () => activateTab(trigger.dataset.tabTrigger));
   }
+
   for (const button of markButtons) {
     button.addEventListener('click', async () => {
       const email = button.dataset.markVotedEmail;
-
       const ok = window.confirm(t('markVotedConfirm').replace('{email}', email));
       if (!ok) return;
 
-      await window.txw.markAccountVotedToday(email);
+      await window.txw.markInstanceAccountVoted(selectedInstanceId, email);
       await showAccounts();
+      await refreshInstances();
     });
   }
-  //
+}
+
+// Show Vote Score History Graph/Table
+async function showHistory() {
+  if (!selectedInstanceId) return;
+
+  const summary = await window.txw.getInstanceSummary(selectedInstanceId);
+  const rows = summary.history.map((row) => `
+    <tr>
+      <td>${formatDateTime(row.checkedAt)}</td>
+      <td>${formatVote(row.tianXiweiVotes)}</td>
+      <td>${formatVote(row.top1Votes)}</td>
+    </tr>
+  `).join('');
+
+  openModal(t('historyTitle'), `
+    <table>
+      <thead>
+        <tr>
+          <th>${t('time')}</th>
+          <th>${t('tianXiwei')}</th>
+          <th>${t('top1')}</th>
+        </tr>
+      </thead>
+      <tbody>${rows || `<tr><td colspan="3">${t('noHistory')}</td></tr>`}</tbody>
+    </table>
+  `);
 }
 
 function showHelp() {
@@ -286,99 +569,15 @@ function showHelp() {
   `);
 }
 
-async function start(mode) {
-  let options = {};
-  if (mode === 'signup') {
-    const count = await requestSignupCount();
-    if (count === null) return;
-    if (!Number.isInteger(count) || count < 1) {
-      openModal(t('invalidCountTitle'), `<p>${t('invalidCountMessage')}</p>`);
-      return;
-    }
-    options.count = count;
-  }
-
-  logOutput.textContent = '';
-  setRunning(true, mode);
-  try {
-    await window.txw.start(mode, options);
-  } catch (error) {
-    appendLog(`\n${error.message || error}\n`);
-  } finally {
-    setRunning(false);
-    await refreshSummary();
-  }
-}
-
-function requestSignupCount() {
-  signupCountInput.value = '1';
-  countDialog.showModal();
-  signupCountInput.focus();
-  signupCountInput.select();
-
-  return new Promise((resolve) => {
-    let wrappedConfirm;
-    let wrappedClose;
-    let onKeyDown;
-
-    const cleanup = () => {
-      confirmCountDialog.removeEventListener('click', wrappedConfirm);
-      closeCountDialog.removeEventListener('click', wrappedClose);
-      countDialog.removeEventListener('cancel', wrappedClose);
-      signupCountInput.removeEventListener('keydown', onKeyDown);
-    };
-
-    const onConfirm = () => {
-      const count = Number(signupCountInput.value);
-      countDialog.close();
-      cleanup();
-      resolve(count);
-    };
-
-    const onClose = () => {
-      countDialog.close();
-      cleanup();
-      resolve(null);
-    };
-
-    onKeyDown = (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        wrappedConfirm();
-      }
-    };
-
-    wrappedClose = () => {
-      onClose();
-    };
-
-    wrappedConfirm = () => {
-      onConfirm();
-    };
-
-    signupCountInput.addEventListener('keydown', onKeyDown);
-    confirmCountDialog.addEventListener('click', wrappedConfirm, { once: true });
-    closeCountDialog.addEventListener('click', wrappedClose, { once: true });
-    countDialog.addEventListener('cancel', wrappedClose, { once: true });
-  });
-}
-
-window.txw.onSetupStatus((value) => {
-  setupStatus.textContent = t(value);
-});
-
-// 
+// Smart logs translator
 function translateWorkerError(errorText) {
   const normalized = errorText.trim();
-
   if (normalized.includes('Không lấy được email từ temp-mail UI')) {
     return t('workerErrorTempMailReadFailed');
   }
-
   if (normalized.includes('page.goto: Target page, context or browser has been closed')) {
     return t('workerErrorBrowserClosed');
   }
-
   return errorText;
 }
 
@@ -473,7 +672,7 @@ function translateWorkerLog(text) {
       return t('workerNavigatingTo').replace('{url}', navigatingMatch[1]);
     }
 
-    if (trimmed.includes('Đã điền form Bugs') || trimmed.includes('focus') && trimmed.includes('Captcha')) {
+    if (trimmed.includes('Đã điền form Bugs') || (trimmed.includes('focus') && trimmed.includes('Captcha'))) {
       return t('workerSignupFormFilled');
     }
 
@@ -538,38 +737,59 @@ function translateWorkerLog(text) {
   }).join('\n');
 }
 
-window.txw.onLog((value) => {
-  appendLog(translateWorkerLog(value));
+// --- IPC IPC EVENTS ---
+
+window.txw.onSetupStatus((value) => {
+  setupStatus.textContent = t(value);
 });
 
-window.txw.onRunState((state) => {
-  setRunning(state.running, state.mode);
+// Logs listener from worker process
+window.txw.onLog(({ instanceId, text }) => {
+  appendInstanceLog(instanceId, translateWorkerLog(text));
 });
 
-window.txw.onDataUpdated(async () => {
-  await refreshSummary();
-});
-
-//
-importAccountsButton.addEventListener('click', async () => {
-  const result = await window.txw.importAccounts();
-
-  if (!result || result.cancelled) {
-    openModal(t('importDoneTitle'), `<p>${t('importCancelled')}</p>`);
-    return;
+// Run state listener (running: true/false)
+window.txw.onRunState(({ instanceId, running }) => {
+  const inst = instances.find((i) => i.id === instanceId);
+  if (inst) {
+    inst.running = running;
+    renderInstancesList();
+    if (selectedInstanceId === instanceId) {
+      updateSelectedInstanceDashboard(inst);
+    }
   }
-
-  const message = t('importDoneMessage')
-    .replace('{created}', result.created)
-    .replace('{updated}', result.updated)
-    .replace('{skipped}', result.skipped);
-
-  openModal(t('importDoneTitle'), `<p>${message}</p>`);
-  await refreshSummary();
 });
-//
+
+// Accounts or summary updated
+window.txw.onDataUpdated(async ({ instanceId }) => {
+  await refreshInstances();
+});
+
+// Global list updated
+window.txw.onInstancesUpdated(async () => {
+  await refreshInstances();
+});
+
+// --- UI LISTENERS ---
+
+languageSelect?.addEventListener('change', (event) => {
+  applyLanguage(event.target.value);
+});
+
+// Modal Events
+document.getElementById('closeModal').addEventListener('click', () => modal.close());
+
+// Selected Instance Action Events
+signupButton.addEventListener('click', () => startInstanceProcess(selectedInstanceId, 'signup'));
+loginButton.addEventListener('click', () => startInstanceProcess(selectedInstanceId, 'login'));
+accountsButton.addEventListener('click', showAccounts);
+historyButton.addEventListener('click', showHistory);
+helpButton.addEventListener('click', showHelp);
+helpButtonMain.addEventListener('click', showHelp);
+
+// Download Excel Template
 downloadTemplateButton?.addEventListener('click', async () => {
-  const result = await window.txw.downloadAccountsTemplate(currentLanguage);
+  const result = await window.txw.downloadTemplate(currentLanguage);
 
   if (!result || result.cancelled) {
     openModal(t('downloadTemplateDoneTitle'), `<p>${t('downloadTemplateCancelled')}</p>`);
@@ -582,18 +802,61 @@ downloadTemplateButton?.addEventListener('click', async () => {
   );
 });
 
-languageSelect?.addEventListener('change', (event) => {
-  applyLanguage(event.target.value);
-});
-signupButton.addEventListener('click', () => start('signup'));
-loginButton.addEventListener('click', () => start('login'));
-stopButton.addEventListener('click', () => window.txw.stop());
-historyButton.addEventListener('click', showHistory);
-accountsButton.addEventListener('click', showAccounts);
-document.getElementById('helpButton').addEventListener('click', showHelp);
-document.getElementById('helpButtonMain').addEventListener('click', showHelp);
-document.getElementById('closeModal').addEventListener('click', () => modal.close());
+// Import Excel Accounts
+importAccountsButton?.addEventListener('click', async () => {
+  if (!selectedInstanceId) return;
+  const result = await window.txw.importInstanceAccounts(selectedInstanceId);
 
+  if (!result || result.cancelled) {
+    openModal(t('importDoneTitle'), `<p>${t('importCancelled')}</p>`);
+    return;
+  }
+
+  const message = t('importDoneMessage')
+    .replace('{created}', result.created)
+    .replace('{updated}', result.updated)
+    .replace('{skipped}', result.skipped);
+
+  openModal(t('importDoneTitle'), `<p>${message}</p>`);
+  await refreshInstances();
+});
+
+// Global instances management
+addInstanceButton.addEventListener('click', () => openInstanceForm(null));
+
+// Instance Form Modal Events
+closeInstanceFormDialog.addEventListener('click', () => instanceFormDialog.close());
+confirmInstanceFormDialog.addEventListener('click', saveInstanceForm);
+
+// Run/Stop All Actions
+runAllSignupButton.addEventListener('click', async () => {
+  for (const inst of instances) {
+    if (!inst.running) {
+      // Chạy signup 1 account làm ví dụ hoặc chạy bình thường
+      startInstanceProcess(inst.id, 'signup');
+      await new Promise(r => setTimeout(r, 500)); // Delay nhẹ
+    }
+  }
+});
+
+runAllLoginButton.addEventListener('click', async () => {
+  for (const inst of instances) {
+    if (!inst.running) {
+      startInstanceProcess(inst.id, 'login');
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+});
+
+stopAllButton.addEventListener('click', async () => {
+  for (const inst of instances) {
+    if (inst.running) {
+      await window.txw.stopInstance(inst.id);
+    }
+  }
+});
+
+// First Init app
 (async () => {
   applyLanguage(currentLanguage);
 
@@ -604,8 +867,7 @@ document.getElementById('closeModal').addEventListener('click', () => modal.clos
     console.error(error);
   }
 
-  await refreshSummary();
+  await refreshInstances();
   splash.classList.add('hidden');
   appRoot.classList.remove('hidden');
-  setIdleLog();
 })();

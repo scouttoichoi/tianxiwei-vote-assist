@@ -2,15 +2,30 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('txw', {
   setup: () => ipcRenderer.invoke('setup:first-run'),
-  getSummary: () => ipcRenderer.invoke('data:summary'),
-  getAccounts: () => ipcRenderer.invoke('data:accounts'),
-  importAccounts: () => ipcRenderer.invoke('accounts:import'), //
-  markAccountVotedToday: (email) => ipcRenderer.invoke('accounts:mark-voted-today', email),//
-  downloadAccountsTemplate: (language) => ipcRenderer.invoke('accounts:download-template', language),//
-  start: (mode, options) => ipcRenderer.invoke('run:start', mode, options),
-  stop: () => ipcRenderer.invoke('run:stop'),
+  
+  // Instance APIs
+  getInstances: () => ipcRenderer.invoke('instances:list'),
+  createInstance: (name, proxy) => ipcRenderer.invoke('instances:create', name, proxy),
+  deleteInstance: (id) => ipcRenderer.invoke('instances:delete', id),
+  updateInstance: (id, name, proxy) => ipcRenderer.invoke('instances:update-config', id, name, proxy),
+  
+  // Running APIs
+  startInstance: (id, mode, options) => ipcRenderer.invoke('instances:start', id, mode, options),
+  stopInstance: (id) => ipcRenderer.invoke('instances:stop', id),
+  
+  // Data APIs per Instance
+  getInstanceSummary: (id) => ipcRenderer.invoke('instances:get-summary', id),
+  getInstanceAccounts: (id) => ipcRenderer.invoke('instances:get-accounts', id),
+  importInstanceAccounts: (id) => ipcRenderer.invoke('instances:import-accounts', id),
+  markInstanceAccountVoted: (id, email) => ipcRenderer.invoke('instances:mark-voted', id, email),
+  
+  // Shared Utilities
+  downloadTemplate: (language) => ipcRenderer.invoke('instances:download-template', language),
+  
+  // Event listeners
   onSetupStatus: (callback) => ipcRenderer.on('setup-status', (_event, value) => callback(value)),
-  onLog: (callback) => ipcRenderer.on('worker-log', (_event, value) => callback(value)),
-  onRunState: (callback) => ipcRenderer.on('run-state', (_event, value) => callback(value)),
-  onDataUpdated: (callback) => ipcRenderer.on('data-updated', () => callback())
+  onLog: (callback) => ipcRenderer.on('worker-log', (_event, payload) => callback(payload)),
+  onRunState: (callback) => ipcRenderer.on('run-state', (_event, payload) => callback(payload)),
+  onDataUpdated: (callback) => ipcRenderer.on('data-updated', (_event, payload) => callback(payload)),
+  onInstancesUpdated: (callback) => ipcRenderer.on('instances-updated', () => callback())
 });
