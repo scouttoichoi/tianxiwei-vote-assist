@@ -1,0 +1,66 @@
+{
+  "name": "tianxiwei-vote-assist",
+  "version": "0.1.0",
+  "description": "TIAN Xiwei vote assist desktop app",
+  "private": true,
+  "type": "module",
+  "main": "app/main.cjs",
+  "scripts": {
+    "vote-assist": "node scripts/vote-assist.mjs signup",
+    "vote-assist:signup": "node scripts/vote-assist.mjs signup",
+    "vote-assist:login": "node scripts/vote-assist.mjs login",
+    "app": "electron .",
+    "dist:mac": "electron-builder --mac dmg",
+    "dist:win": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.tianxiwei.voteassist",
+    "productName": "Tian Xiwei Vote Assist",
+    "asar": true,
+    "files": [
+      "app/**/*",
+      "scripts/**/*",
+      "vote-assist.config.example.json",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraMetadata": {
+      "main": "app/main.cjs"
+    },
+    "mac": {
+      "icon": "app/assets/icon.icns",
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "icon": "app/assets/icon-source.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-setup.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable-${arch}.${ext}"
+    }
+  },
+  "dependencies": {
+    "cloakbrowser": "latest",
+    "playwright": "latest",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^42.1.0",
+    "electron-builder": "^26.8.1"
+  }
+}

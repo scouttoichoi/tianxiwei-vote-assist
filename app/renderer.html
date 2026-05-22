@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tian Xiwei Vote Assist</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+
+<body>
+  <section id="splash" class="splash">
+    <div class="splashOverlay">
+      <button class="helpButton" id="helpButton" data-i18n="help">Hướng dẫn sử dụng</button>
+      <div class="splashPanel">
+        <div class="brand">TIAN Xiwei Vote Assist</div>
+        <h1 data-i18n="setupPreparing">Đang chuẩn bị công cụ...</h1>
+        <p id="setupStatus" data-i18n="setupHint">Lần đầu có thể mất vài phút</p>
+        <div class="progress"><span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <main id="app" class="app hidden">
+    <header class="topbar">
+      <div class="topActions">
+        <select id="languageSelect" class="languageSelect" aria-label="Language">
+          <option value="vi">Tiếng Việt</option>
+          <option value="zh">中文</option>
+          <option value="ko">한국어</option>
+          <option value="en">English</option>
+        </select>
+
+        <button class="helpButton dark" id="helpButtonMain" data-i18n="help">Hướng dẫn sử dụng</button>
+        <button class="helpButton dark" id="historyButton" data-i18n="history">Lịch sử điểm vote</button>
+      </div>
+    </header>
+
+    <section class="scoreBand">
+      <div>
+        <span class="label" data-i18n="tianXiwei">TIAN Xiwei</span>
+        <strong id="tianVotes">-</strong>
+      </div>
+      <div>
+        <span class="label" data-i18n="top1">Top 1</span>
+        <strong id="topVotes">-</strong>
+      </div>
+      <div>
+        <span class="label" data-i18n="gap">Chênh lệch</span>
+        <strong id="gapVotes">-</strong>
+      </div>
+      <div class="updatedAt">
+        <span class="label" data-i18n="updatedAt">Cập nhật gần nhất</span>
+        <strong id="updatedAt">-</strong>
+      </div>
+    </section>
+    <div class="emptyScoreHint" id="emptyScoreHint" data-i18n="emptyScoreHint">Chạy tool lần đầu để cập nhật chỉ số
+      vote.</div>
+
+    <section class="actions">
+      <button class="primaryAction" id="signupButton">
+        <span data-i18n="signup">Đăng ký mới và Vote</span>
+        <small data-i18n="signupHint">Chạy liên tục đến khi bấm Dừng</small>
+      </button>
+      <div class="accountAction">
+        <button class="primaryAction secondary" id="loginButton">
+          <span data-i18n="loginVote">Vote bằng tài khoản cũ</span>
+          <small data-i18n="loginVoteHint">Chỉ chạy account chưa vote hôm nay</small>
+        </button>
+        <button class="miniButton" id="accountsButton" data-i18n="accounts">Danh sách tài khoản</button>
+        <button class="miniButton" id="importAccountsButton" data-i18n="importAccounts"
+          data-i18n-title="importAccountsHint" title="Import tài khoản Bugs bằng file Excel 3 cột.">
+          Import Excel
+        </button>
+        <button class="miniButton" id="downloadTemplateButton" data-i18n="downloadTemplate"
+          data-i18n-title="downloadTemplateHint" title="Tải file Excel mẫu để nhập tài khoản Bugs.">
+          Tải template
+        </button>
+      </div>
+      <button class="stopButton hidden" id="stopButton" data-i18n="stop">Dừng</button>
+    </section>
+
+    <section class="logPanel">
+      <div class="panelHeader" data-i18n="logTitle">Nhật ký chạy</div>
+      <pre id="logOutput"></pre>
+    </section>
+  </main>
+
+  <dialog id="modal">
+    <div class="modalHeader">
+      <strong id="modalTitle">Thông tin</strong>
+      <button id="closeModal" data-i18n="close">Đóng</button>
+    </div>
+    <div id="modalBody"></div>
+  </dialog>
+
+  <dialog id="countDialog">
+    <div class="modalHeader">
+      <strong data-i18n="signupCountTitle">Đăng ký mới và Vote</strong>
+      <button id="closeCountDialog" data-i18n="close">Đóng</button>
+    </div>
+    <div id="countDialogBody" class="countDialogBody">
+      <p data-i18n="signupCountQuestion">Bạn muốn đăng ký bao nhiêu tài khoản?</p>
+      <input id="signupCountInput" type="number" min="1" step="1" value="1">
+      <div class="countDialogActions">
+        <button id="confirmCountDialog" data-i18n="start">Bắt đầu</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="./i18n.js"></script>
+  <script src="./renderer.js"></script>
+</body>
+
+</html>

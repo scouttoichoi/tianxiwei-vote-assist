@@ -1,0 +1,19 @@
+{
+  "userDataDir": ".cloakbrowser-profile",
+  "freshProfilePerRun": true,
+  "viewport": {
+    "width": 1280,
+    "height": 820
+  },
+  "args": [
+    "--window-size=1280,820",
+    "--window-position=80,20"
+  ],
+  "randomizeTempMail": false,
+  "executablePath": "",
+  "proxy": null,
+  "proxyRotation": "sequential",
+  "proxyPool": [
+    "http://127.0.0.1:7890"
+  ]
+}

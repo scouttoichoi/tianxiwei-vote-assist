@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+win-unpacked/
+
+# runtime/browser data
+.cloakbrowser-profile/
+
+# sensitive/runtime data
+data/accounts.json
+data/vote-score-history.csv
+data/proxy-rotation-state.json
+
+# logs
+logs/
+*.log
+
+# local config
+vote-assist.config.json
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+__MACOSX/
