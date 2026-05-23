@@ -114,7 +114,7 @@ async function runSignupCommand(config) {
         await fs.rm(path.join('logs', file), { force: true });
       }
     }
-  } catch (err) {}
+  } catch (err) { }
 
   const totalRuns = Number(process.argv[3] ?? config.signupRuns ?? 1);
   const browserApi = await loadBrowserApi();
@@ -124,7 +124,7 @@ async function runSignupCommand(config) {
     console.log(`\nBắt đầu signup-vote lượt ${runIndex}/${totalRuns}`);
     const ok = await runSingleSignupAndVote(browserApi, config).catch(async (error) => {
       console.warn(`Lỗi signup-vote lượt ${runIndex}: ${error.message}`);
-      await appendLog({ status: 'signup-failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => {});
+      await appendLog({ status: 'signup-failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => { });
       return false;
     });
     completed += ok ? 1 : 0;
@@ -173,8 +173,8 @@ async function runSingleSignupAndVote(browserApi, config) {
     await fillBugsSignup(signupPage, state);
 
     console.log('\nĐã điền form Bugs. Đang tự động focus vào ô nhập mã Captcha...');
-    await signupPage.locator('#captchaText').focus().catch(() => {});
-    await signupPage.locator('#captchaText').scrollIntoViewIfNeeded().catch(() => {});
+    await signupPage.locator('#captchaText').focus().catch(() => { });
+    await signupPage.locator('#captchaText').scrollIntoViewIfNeeded().catch(() => { });
 
     console.log('✍️ Vui lòng tự nhập mã Captcha trên màn hình trình duyệt và bấm nút Sign Up (#btnJoinComplete) để tiếp tục.');
 
@@ -184,8 +184,10 @@ async function runSingleSignupAndVote(browserApi, config) {
     }
 
     //
-    await tempPage.bringToFront().catch(() => {});
-    const emailVerified = await verifyEmail(tempPage, tempMailProvider);
+    if (config.autoFocusBrowser !== false) {
+      await tempPage.bringToFront().catch(() => { });
+    }
+    const emailVerified = await verifyEmail(tempPage, tempMailProvider, config);
     if (!emailVerified) {
       state.status = 'email-timeout';
       await appendLog({ ...state, failedAt: new Date().toISOString(), status: 'email-timeout', error: 'Không nhận được email xác thực trong 30 giây' });
@@ -193,7 +195,8 @@ async function runSingleSignupAndVote(browserApi, config) {
       return false;
     }
 
-    const voted = await voteFavorite(context);
+    console.log('Đăng nhập thành công, bắt đầu mở trang vote...');
+    const voted = await voteFavorite(context, config);
     state.lastVotedAt = voted ? new Date().toISOString() : '';
     state.lastVoteCount = voted ? 5 : 0;
     state.status = voted ? 'active' : 'needs-review';
@@ -204,7 +207,7 @@ async function runSingleSignupAndVote(browserApi, config) {
   } finally {
     await browser.close?.();
     if (config.freshProfilePerRun ?? true) {
-      await fs.rm(USER_DATA_DIR, { recursive: true, force: true }).catch(() => {});
+      await fs.rm(USER_DATA_DIR, { recursive: true, force: true }).catch(() => { });
     }
   }
 }
@@ -245,12 +248,9 @@ async function runLoginCommand(config) {
       await fillBugsLogin(loginPage, account);
 
       console.log('Đã mở đúng form Bugs, điền ID/password, rồi tự bấm Log in ngay.');
-      const loggedIn = await waitForLoginSuccess(context, loginPage, initialLoginUrl);
-      if (!loggedIn) {
-        throw new Error(LOGIN_NOT_CONFIRMED_ERROR);
-      }
+      await waitAfterLoginSubmit(context, loginPage, initialLoginUrl);
 
-      const voted = await voteFavorite(context);
+      const voted = await voteFavorite(context, config);
       account.lastVotedAt = voted ? new Date().toISOString() : account.lastVotedAt;
       account.lastVoteCount = voted ? nextVoteCount(account.lastVoteCount, 5) : normalizeVoteCount(account.lastVoteCount);
       account.lastError = voted ? '' : 'vote-not-confirmed';
@@ -262,18 +262,18 @@ async function runLoginCommand(config) {
         account.status = 'deactive';
         account.lastError = error.message;
         await saveAccounts(accounts);
-        await appendLog({ email: account.email, failedAt: new Date().toISOString(), status: 'login-invalid-deactive', error: error.message }).catch(() => {});
+        await appendLog({ email: account.email, failedAt: new Date().toISOString(), status: 'login-invalid-deactive', error: error.message }).catch(() => { });
         console.warn(`Chuyển account lỗi sang deactive: ${account.email}`);
         continue;
       }
       account.lastError = error.message;
       await saveAccounts(accounts);
-      await appendLog({ email: account.email, failedAt: new Date().toISOString(), status: 'login-failed', error: error.message }).catch(() => {});
+      await appendLog({ email: account.email, failedAt: new Date().toISOString(), status: 'login-failed', error: error.message }).catch(() => { });
       console.warn(`Lỗi account ${account.email}: ${error.message}`);
     } finally {
       await browser.close?.();
       if (config.freshProfilePerRun ?? true) {
-        await fs.rm(USER_DATA_DIR, { recursive: true, force: true }).catch(() => {});
+        await fs.rm(USER_DATA_DIR, { recursive: true, force: true }).catch(() => { });
       }
     }
   }
@@ -377,6 +377,13 @@ async function launchBrowser(api, config) {
     process.env.CLOAKBROWSER_BINARY_PATH = config.executablePath;
   }
 
+  const browserArgs = Array.isArray(config.args) && config.args.length
+    ? config.args
+    : [
+      '--window-size=1280,820',
+      '--window-position=80,20'
+    ];
+
   if (typeof api.launchPersistentContext === 'function') {
     return api.launchPersistentContext({
       headless: false,
@@ -385,11 +392,7 @@ async function launchBrowser(api, config) {
       proxy: config.proxy,
       viewport: config.viewport ?? DEFAULT_VIEWPORT,
       launchOptions: {
-        args: [
-          '--window-size=1280,820',
-          '--window-position=80,20',
-          ...(config.args ?? [])
-        ]
+        args: browserArgs
       }
     });
   }
@@ -400,11 +403,8 @@ async function launchBrowser(api, config) {
       humanize: true,
       proxy: config.proxy,
       viewport: config.viewport ?? DEFAULT_VIEWPORT,
-      args: [
-        '--window-size=1280,820',
-        '--window-position=80,20',
-        ...(config.args ?? [])
-      ]
+      args: browserArgs
+
     });
   }
 
@@ -413,11 +413,8 @@ async function launchBrowser(api, config) {
       headless: false,
       humanize: true,
       proxy: config.proxy,
-      args: [
-        '--window-size=1280,820',
-        '--window-position=80,20',
-        ...(config.args ?? [])
-      ]
+      args: browserArgs
+
     });
   }
 
@@ -491,7 +488,7 @@ async function fillBugsLogin(page, account) {
   await page.waitForSelector('#user_id, input[name="user_id"]', { timeout: 60_000 });
   await fillBySelectors(page, ['#user_id', 'input[name="user_id"]'], account.email);
   await fillBySelectors(page, ['#passwd', 'input[name="passwd"]'], account.password ?? PASSWORD);
-  await loginSubmitButton(page).scrollIntoViewIfNeeded().catch(() => {});
+  await loginSubmitButton(page).scrollIntoViewIfNeeded().catch(() => { });
   await submitLogin(page);
 }
 
@@ -507,7 +504,7 @@ async function openBugsLoginForm(page) {
   const isFormVisible = await userIdField.isVisible().catch(() => false);
   if (isFormVisible) return;
 
-  await bugsLoginButton.scrollIntoViewIfNeeded().catch(() => {});
+  await bugsLoginButton.scrollIntoViewIfNeeded().catch(() => { });
   await bugsLoginButton.click({ timeout: 10_000, force: true }).catch(async () => {
     await bugsLoginButton.evaluate((element) => element.click());
   });
@@ -516,14 +513,14 @@ async function openBugsLoginForm(page) {
     const userId = document.querySelector('#user_id, input[name="user_id"]');
     const password = document.querySelector('#passwd, input[name="passwd"]');
     return title.includes('벅스 아이디 또는 이메일로 로그인') && !!userId && !!password;
-  }, { timeout: 30_000 }).catch(() => {});
+  }, { timeout: 30_000 }).catch(() => { });
   await page.waitForSelector('#user_id, input[name="user_id"]', { state: 'visible', timeout: 30_000 });
 }
 
 async function randomizeTempMail(page, provider = TEMP_MAIL_PROVIDERS[0]) {
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(1_500);
-  const clicked = await clickFirstAvailable(page, provider.rotateSelectors).catch(() => {});
+  const clicked = await clickFirstAvailable(page, provider.rotateSelectors).catch(() => { });
   await page.waitForTimeout(2_000);
   return Boolean(clicked);
 }
@@ -543,7 +540,7 @@ async function selectAnyGender(page) {
   for (let i = 0; i < count; i += 1) {
     const radio = radios.nth(i);
     if (await radio.isDisabled().catch(() => true)) continue;
-    await radio.check({ force: true }).catch(() => {});
+    await radio.check({ force: true }).catch(() => { });
     if (await radio.isChecked().catch(() => false)) return;
   }
   throw new Error('Không chọn được gender radio.');
@@ -553,7 +550,7 @@ async function fillBySelectors(page, selectors, value) {
   for (const selector of selectors) {
     const field = page.locator(selector).first();
     if (!(await field.count().catch(() => 0))) continue;
-    await field.scrollIntoViewIfNeeded().catch(() => {});
+    await field.scrollIntoViewIfNeeded().catch(() => { });
     await field.fill(value, { force: true }).catch(async () => {
       await field.click({ force: true });
       await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
@@ -568,7 +565,7 @@ async function fillBySelectors(page, selectors, value) {
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
       element.dispatchEvent(new Event('blur', { bubbles: true }));
-    }, value).catch(() => {});
+    }, value).catch(() => { });
     const actual = await field.inputValue().catch(() => '');
     if (actual === value) return;
   }
@@ -652,7 +649,7 @@ async function fillVisibleTextInputByIndex(page, index, value) {
 async function tickRequiredTerms(page) {
   const allAgree = page.locator('label:has-text("I agree with all")').first();
   if (await allAgree.count().catch(() => 0)) {
-    await allAgree.click().catch(() => {});
+    await allAgree.click().catch(() => { });
     return;
   }
 
@@ -661,7 +658,7 @@ async function tickRequiredTerms(page) {
   for (let i = 0; i < count; i += 1) {
     const box = checkboxes.nth(i);
     const disabled = await box.isDisabled().catch(() => true);
-    if (!disabled) await box.check().catch(() => {});
+    if (!disabled) await box.check().catch(() => { });
   }
 }
 
@@ -686,38 +683,54 @@ async function waitForRegistrationSuccess(page) {
   return false;
 }
 
+//
+async function waitAfterLoginSubmit(context, page, initialLoginUrl) {
+  const deadline = Date.now() + 5_000;
+
+  while (Date.now() < deadline) {
+    const loginErrorText = await readLoginErrorMessage(page);
+    if (loginErrorText) {
+      throw new Error(INVALID_LOGIN_MESSAGE);
+    }
+
+    await sleep(500);
+  }
+
+  const finalLoginErrorText = await readLoginErrorMessage(page);
+  if (finalLoginErrorText) {
+    throw new Error(INVALID_LOGIN_MESSAGE);
+  }
+
+  return true;
+}
+//
+
 async function waitForLoginSuccess(context, page, initialLoginUrl) {
   for (let i = 0; i < 180; i += 1) {
     const pages = typeof context.pages === 'function' ? context.pages() : [page];
-    let hasLoggedInPage = false;
 
     for (const currentPage of pages) {
       const url = currentPage.url();
-      const isLoginPage = currentPage === page;
-      if (isLoginPage) {
-        const loginErrorText = await readLoginErrorMessage(currentPage);
-        if (loginErrorText) {
-          throw new Error(INVALID_LOGIN_MESSAGE);
-        }
+
+      if (!/bugs\.co\.kr/i.test(url)) {
+        continue;
       }
 
-      const leftInitialLoginUrl = url !== initialLoginUrl;
+      const loginErrorText = await readLoginErrorMessage(currentPage);
+      if (loginErrorText) {
+        throw new Error(INVALID_LOGIN_MESSAGE);
+      }
+
       const stillOnLoginPath = /loginview|\/member\/login/i.test(url);
-      if (leftInitialLoginUrl && !stillOnLoginPath && await hasLoggedInIndicators(currentPage)) {
+
+      if (!stillOnLoginPath && await hasLoggedInIndicators(currentPage)) {
         return true;
       }
-
-      if (await hasLoggedInIndicators(currentPage)) {
-        hasLoggedInPage = true;
-      }
-    }
-
-    if (hasLoggedInPage) {
-      return true;
     }
 
     await sleep(1_000);
   }
+
   return false;
 }
 
@@ -743,14 +756,22 @@ async function hasLoggedInIndicators(page) {
 }
 
 async function readLoginErrorMessage(page) {
-  const inlineError = await page.locator('#loginDesc').first().innerText().catch(() => '');
-  if (/아이디\s*또는\s*비밀번호를\s*확인해\s*주세요\.?/i.test(inlineError)) {
-    return inlineError.trim();
+  const bodyText = await page.locator('body').innerText().catch(() => '');
+
+  const invalidLoginPattern = /아이디\s*또는\s*비밀번호를\s*확인해\s*주세요\.?/i;
+
+  if (invalidLoginPattern.test(bodyText)) {
+    return '아이디 또는 비밀번호를 확인해 주세요.';
   }
 
-  const validationText = await page.locator('form#frmLoginLayer .validation').first().innerText().catch(() => '');
-  if (/아이디\s*또는\s*비밀번호를\s*확인해\s*주세요\.?/i.test(validationText)) {
-    return validationText.trim();
+  const errorText = await page
+    .locator('#loginDesc, form#frmLoginLayer .validation, .validation, .error, .txtError')
+    .first()
+    .innerText()
+    .catch(() => '');
+
+  if (invalidLoginPattern.test(errorText)) {
+    return errorText.trim();
   }
 
   return '';
@@ -774,7 +795,7 @@ async function submitLogin(page) {
   const submitCount = await page.locator('form#frmLoginLayer button.submit[onclick*="loginProcess"]').count().catch(() => 0);
   if (submitCount !== 1) return false;
 
-  await button.scrollIntoViewIfNeeded().catch(() => {});
+  await button.scrollIntoViewIfNeeded().catch(() => { });
   await page.evaluate(() => {
     const formElement = document.querySelector('form#frmLoginLayer');
     const buttonElement = formElement?.querySelector('button.submit[onclick*="loginProcess"]');
@@ -785,24 +806,26 @@ async function submitLogin(page) {
     }
     buttonElement.click();
     return true;
-  }).catch(() => {});
-  await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+  }).catch(() => { });
+  await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => { });
   return true;
 }
 
-async function verifyEmail(tempPage, provider = TEMP_MAIL_PROVIDERS[0]) {
+async function verifyEmail(tempPage, provider = TEMP_MAIL_PROVIDERS[0], config = {}) {
   console.log('\nĐang chờ email xác thực Bugs trên temp-mail...');
   //
-  await tempPage.bringToFront().catch(() => {});
+  if (config.autoFocusBrowser !== false) {
+    await tempPage.bringToFront().catch(() => { });
+  }
 
   const deadline = Date.now() + EMAIL_VERIFY_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    await clickFirstAvailable(tempPage, provider.refreshSelectors).catch(() => {});
+    await clickFirstAvailable(tempPage, provider.refreshSelectors).catch(() => { });
     await sleep(2_000);
 
     const bugsMail = tempPage.locator('text=/\\[Bugs\\]|Please proceed|authentication/i').first();
     if (await bugsMail.count().catch(() => 0)) {
-      await bugsMail.click().catch(() => {});
+      await bugsMail.click().catch(() => { });
       await tempPage.waitForTimeout(1_500);
       const authUrl = await findEmailAuthenticationUrl(tempPage);
       if (authUrl) {
@@ -860,9 +883,9 @@ async function clickConfirmAfterAuth(page) {
   for (const selector of confirmSelectors) {
     const locator = page.locator(selector).first();
     if (await locator.count().catch(() => 0)) {
-      await locator.scrollIntoViewIfNeeded().catch(() => {});
+      await locator.scrollIntoViewIfNeeded().catch(() => { });
       await locator.click({ timeout: 2_000, force: true });
-      await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+      await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => { });
       return true;
     }
   }
@@ -871,32 +894,63 @@ async function clickConfirmAfterAuth(page) {
 
 async function prepareFavoritePage(page) {
   await page.waitForLoadState('domcontentloaded');
-  await page.locator('text=/ENG/i').first().click().catch(() => {});
+  await page.locator('text=/ENG/i').first().click().catch(() => { });
   const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote[data-candidate-id="11046"]').first();
   if (await voteButton.count().catch(() => 0)) {
     await voteButton.scrollIntoViewIfNeeded();
-    await voteButton.highlight().catch(() => {});
+    await voteButton.highlight().catch(() => { });
     return;
   }
 
   const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
   if (await candidate.count().catch(() => 0)) {
     await candidate.scrollIntoViewIfNeeded();
-    await candidate.highlight().catch(() => {});
+    await candidate.highlight().catch(() => { });
   }
 }
 
-async function voteFavorite(context) {
+async function voteFavorite(context, config = {}) {
   const votePage = await context.newPage();
-  await votePage.bringToFront().catch(() => {});
-  await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+  if (config.autoFocusBrowser !== false) {
+    await votePage.bringToFront().catch(() => { });
+  }
+  // await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+  await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'commit', timeout: 15_000 });
+  await votePage.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => { });
+  //
+  let loginRequired = await votePage
+    .locator('text=/requires login|A service that requires login|로그인/i')
+    .first()
+    .isVisible({ timeout: 3_000 })
+    .catch(() => false);
+
+  if (loginRequired) {
+    console.warn('Trang vote báo chưa nhận session login. Đợi thêm rồi thử mở lại trang vote...');
+    await sleep(3_000);
+
+    await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'commit', timeout: 15_000 });
+    await votePage.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => { });
+    // await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+
+    loginRequired = await votePage
+      .locator('text=/requires login|A service that requires login|로그인/i')
+      .first()
+      .isVisible({ timeout: 3_000 })
+      .catch(() => false);
+
+    if (loginRequired) {
+      console.warn('Trang vote vẫn báo chưa đăng nhập sau khi thử lại. Bỏ qua account này, giữ active để lần sau chạy lại.');
+      return false;
+    }
+  }
+  //
   await prepareFavoritePage(votePage);
   await recordVoteScores(votePage);
 
   console.log('\nĐã mở trang vote và tìm nút Voting của TIAN Xiwei.');
   const voted = await completeFavoriteVote(votePage);
   if (!voted) {
-    await waitEnter('Chưa xác nhận được vote tự động. Bạn kiểm tra thủ công xong thì nhấn Enter để tiếp tục...');
+    console.warn('Chưa xác nhận được vote tự động. Bạn kiểm tra thủ công xong thì nhấn Enter để tiếp tục...');//await waitEnter
   }
   return voted;
 }
@@ -972,10 +1026,10 @@ async function completeFavoriteVote(page) {
     .first();
 
   try {
-    await candidate.waitFor({ state: 'visible', timeout: 20_000 });
-    await voteButton.waitFor({ state: 'visible', timeout: 20_000 });
+    await candidate.waitFor({ state: 'visible', timeout: 15_000 });
+    await voteButton.waitFor({ state: 'visible', timeout: 15_000 });
     await voteButton.scrollIntoViewIfNeeded();
-    await voteButton.click({ timeout: 10_000, force: true });
+    await voteButton.click({ timeout: 8_000, force: true });
 
     const popupOpened = await page
       .locator('button[data-ga-params="Favorite_투표하기-모두사용"], button:has-text("Use All")')
@@ -991,13 +1045,13 @@ async function completeFavoriteVote(page) {
     const useAllButton = page
       .locator('button[data-ga-params="Favorite_투표하기-모두사용"], button:has-text("Use All")')
       .first();
-    await useAllButton.waitFor({ state: 'visible', timeout: 15_000 });
+    await useAllButton.waitFor({ state: 'visible', timeout: 10_000 });
     await useAllButton.click({ timeout: 10_000 });
 
     const popupVotingButton = page
       .locator('button.layerBtn[data-ga-params="Favorite_투표하기-투표하기"], button.layerBtn:has-text("VOTING")')
       .first();
-    await popupVotingButton.waitFor({ state: 'visible', timeout: 15_000 });
+    await popupVotingButton.waitFor({ state: 'visible', timeout: 10_000 });
     await popupVotingButton.click({ timeout: 10_000 });
 
     await page.waitForTimeout(2_000);
@@ -1013,7 +1067,7 @@ async function logout(context) {
   const page = await context.newPage();
   await page.goto(BUGS_MUSIC_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
   await page.locator('text=/Logout|로그아웃/i').first().click().catch(async () => {
-    await page.locator('[class*="logout"], a[href*="logout"]').first().click().catch(() => {});
+    await page.locator('[class*="logout"], a[href*="logout"]').first().click().catch(() => { });
   });
   await page.waitForTimeout(1_000);
 }
@@ -1154,6 +1208,6 @@ async function waitEnter(message) {
 
 await main().catch(async (error) => {
   console.error(error.stack || error.message);
-  await appendLog({ status: 'failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => {});
+  await appendLog({ status: 'failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => { });
   process.exit(1);
 });

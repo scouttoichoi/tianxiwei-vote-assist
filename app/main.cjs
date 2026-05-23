@@ -1,5 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeImage, Notification, utilityProcess, dialog } = require('electron');
-const path = require('node:path');
+const { app, BrowserWindow, ipcMain, nativeImage, Notification, utilityProcess, dialog, screen } = require('electron'); const path = require('node:path');
 const fs = require('node:fs/promises');
 const XLSX = require('xlsx');
 
@@ -112,7 +111,7 @@ async function ensureRuntimeDirs() {
         legacyScorePath = path.join(rootDir, 'data', 'vote-score-history.csv');
         legacyProfilePath = path.join(rootDir, '.cloakbrowser-profile');
         legacyConfigPath = path.join(rootDir, 'vote-assist.config.json');
-      } catch {}
+      } catch { }
     }
 
     // 2. Nếu không có hoặc đang chạy app build, quét thư mục userData
@@ -124,7 +123,7 @@ async function ensureRuntimeDirs() {
         legacyScorePath = path.join(runtimeDir, 'data', 'vote-score-history.csv');
         legacyProfilePath = path.join(runtimeDir, '.cloakbrowser-profile');
         legacyConfigPath = path.join(runtimeDir, 'vote-assist.config.json');
-      } catch {}
+      } catch { }
     }
 
     if (legacyAccountsPath) {
@@ -145,7 +144,7 @@ async function ensureRuntimeDirs() {
           try {
             await fs.access(legacyScorePath);
             await fs.copyFile(legacyScorePath, path.join(legacyDir, 'data', 'vote-score-history.csv'));
-          } catch {}
+          } catch { }
         }
 
         // Sao chép Profile Cloakbrowser cũ nếu có (bỏ qua thông báo nếu không có)
@@ -191,6 +190,38 @@ async function ensureRuntimeDirs() {
     console.error('Lỗi trong quá trình tự động migration dữ liệu cũ:', error);
   }
 }
+//
+async function ensureInstanceConfig(instanceId, settings) {
+  const instanceDir = getInstanceDir(instanceId);
+  const configPath = path.join(instanceDir, 'vote-assist.config.json');
+
+  const index = Math.max(
+    0,
+    settings.instances.findIndex((item) => item.id === instanceId)
+  );
+
+  let currentConfig = {};
+  try {
+    currentConfig = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  } catch {}
+
+  const nextConfig = {
+    freshProfilePerRun: true,
+    randomizeTempMail: true,
+    autoFocusBrowser: false,
+    viewport: {
+      width: 600,
+      height: 460,
+      ...(currentConfig.viewport || {})
+    },
+    ...currentConfig,
+    args: currentConfig.args || getBrowserTileArgs(index, settings.instances.length)
+  };
+
+  await fs.mkdir(instanceDir, { recursive: true });
+  await fs.writeFile(configPath, JSON.stringify(nextConfig, null, 2));
+}
+//
 
 function ensureSetupWorkerReady() {
   if (!setupPromise) {
@@ -309,7 +340,36 @@ function formatProxyObjToString(proxyObj) {
   }
   return str;
 }
+//
+function getBrowserTileArgs(index, total = 1) {
+  const display = screen.getPrimaryDisplay();
+  const area = display.workArea;
 
+  const columns = Math.min(3, Math.max(1, total));
+  const width = 600;
+  const height = 460;
+  const gapX = 16;
+  const gapY = 24;
+
+  const rows = Math.ceil(total / columns);
+  const gridWidth = columns * width + (columns - 1) * gapX;
+  const gridHeight = rows * height + (rows - 1) * gapY;
+
+  const startX = area.x + Math.max(0, Math.floor((area.width - gridWidth) / 2));
+  const startY = area.y + Math.max(0, Math.floor((area.height - gridHeight) / 2));
+
+  const col = index % columns;
+  const row = Math.floor(index / columns);
+
+  const x = startX + col * (width + gapX);
+  const y = startY + row * (height + gapY);
+
+  return [
+    `--window-size=${width},${height}`,
+    `--window-position=${x},${y}`
+  ];
+}
+//
 function normalizeHeader(value) {
   return String(value || '')
     .trim()
@@ -413,8 +473,8 @@ ipcMain.handle('instances:list', async () => {
       const date = new Date(acc.lastVotedAt);
       const today = new Date();
       return date.getFullYear() === today.getFullYear() &&
-             date.getMonth() === today.getMonth() &&
-             date.getDate() === today.getDate();
+        date.getMonth() === today.getMonth() &&
+        date.getDate() === today.getDate();
     }).length;
 
     return {
@@ -439,10 +499,17 @@ ipcMain.handle('instances:create', async (_event, name, proxyStr = '') => {
   await fs.mkdir(path.join(instanceDir, 'logs'), { recursive: true });
 
   const proxyObj = parseProxyString(proxyStr);
+  const index = settings.instances.length;
   const configContent = {
     freshProfilePerRun: true,
     randomizeTempMail: true,
-    proxy: proxyObj
+    autoFocusBrowser: false,
+    proxy: proxyObj,
+    viewport: {
+      width: 600,
+      height: 460
+    },
+    args: getBrowserTileArgs(index, settings.instances.length + 1)
   };
 
   await fs.writeFile(
@@ -477,7 +544,7 @@ ipcMain.handle('instances:delete', async (_event, instanceId) => {
   await saveGlobalSettings(settings);
 
   const instanceDir = getInstanceDir(instanceId);
-  await fs.rm(instanceDir, { recursive: true, force: true }).catch(() => {});
+  await fs.rm(instanceDir, { recursive: true, force: true }).catch(() => { });
 
   send('instances-updated');
   return true;
@@ -499,9 +566,16 @@ ipcMain.handle('instances:update-config', async (_event, instanceId, name, proxy
   let configContent = {};
   try {
     configContent = JSON.parse(await fs.readFile(configPath, 'utf8'));
-  } catch {}
+  } catch { }
 
   configContent.proxy = parseProxyString(proxyStr);
+  const index = settings.instances.findIndex((item) => item.id === instanceId);
+  configContent.autoFocusBrowser = false;
+  configContent.viewport = {
+    width: 600,
+    height: 460
+  };
+  configContent.args = getBrowserTileArgs(Math.max(index, 0), settings.instances.length);
   await fs.mkdir(instanceDir, { recursive: true });
   await fs.writeFile(configPath, JSON.stringify(configContent, null, 2));
 
@@ -531,6 +605,7 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
 
   try {
     await ensureSetupWorkerReady();
+    await ensureInstanceConfig(instanceId, settings);
     await runUtility(
       path.join(__dirname, 'runner.cjs'),
       runnerArgs,

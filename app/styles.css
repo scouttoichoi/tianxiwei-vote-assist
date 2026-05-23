@@ -937,3 +937,17 @@ td {
     overflow-y: visible;
   }
 }
+
+.modalNotice {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.modalNotice.success {
+  color: #14532d;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+}

@@ -76,7 +76,7 @@ function applyLanguage(language) {
 
   // Refresh instances to translate dynamic status badges
   renderInstancesList();
-  
+
   if (selectedInstanceId) {
     const log = instanceLogs.get(selectedInstanceId) || '';
     if (!log.trim()) {
@@ -144,7 +144,10 @@ function appendInstanceLog(instanceId, text) {
 function openModal(title, html) {
   modalTitle.textContent = title;
   modalBody.innerHTML = html;
-  modal.showModal();
+
+  if (!modal.open) {
+    modal.showModal();
+  }
 }
 
 // Render Instance List Table
@@ -194,9 +197,9 @@ function renderInstancesList() {
       <td class="textCenter">
         <div class="rowActions" onclick="event.stopPropagation()">
           ${inst.running ?
-            `<button class="btnRowStop" data-action="stop" title="${t('stop')}">⏹</button>` :
-            ''
-          }
+        `<button class="btnRowStop" data-action="stop" title="${t('stop')}">⏹</button>` :
+        ''
+      }
           <button class="btnRowEdit" data-action="edit" title="${t('edit')}">✏️</button>
           <button class="btnRowDelete" data-action="delete" title="${t('delete')}">🗑</button>
         </div>
@@ -329,9 +332,10 @@ async function saveInstanceForm() {
 }
 
 // Start specific instance process
-async function startInstanceProcess(instanceId, mode) {
-  let options = {};
-  if (mode === 'signup') {
+async function startInstanceProcess(instanceId, mode, optionsOverride = null, autoSelect = true) {
+  let options = optionsOverride || {};
+
+  if (mode === 'signup' && !optionsOverride) {
     const count = await requestSignupCount();
     if (count === null) return;
     if (!Number.isInteger(count) || count < 1) {
@@ -348,10 +352,13 @@ async function startInstanceProcess(instanceId, mode) {
   }
 
   appendInstanceLog(instanceId, `${mode === 'login' ? t('runningLogin') : t('runningSignup')}\n`);
-  
+
   try {
     // Select this instance so the user can watch the logs
-    selectInstance(instanceId);
+    if (autoSelect) {
+      selectInstance(instanceId);
+    }
+
     await window.txw.startInstance(instanceId, mode, options);
   } catch (error) {
     appendInstanceLog(instanceId, `\n${error.message || error}\n`);
@@ -522,9 +529,26 @@ async function showAccounts() {
       const ok = window.confirm(t('markVotedConfirm').replace('{email}', email));
       if (!ok) return;
 
-      await window.txw.markInstanceAccountVoted(selectedInstanceId, email);
-      await showAccounts();
-      await refreshInstances();
+      button.disabled = true;
+      const oldText = button.textContent;
+      button.textContent = '...';
+
+      try {
+        await window.txw.markInstanceAccountVoted(selectedInstanceId, email);
+        await refreshInstances();
+        await showAccounts();
+
+        modalBody.insertAdjacentHTML(
+          'afterbegin',
+          `<div class="modalNotice success">
+      ${t('markVotedDoneMessage').replace('{email}', email)}
+    </div>`
+        );
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = oldText;
+        window.alert(error.message || error);
+      }
     });
   }
 }
@@ -830,11 +854,18 @@ confirmInstanceFormDialog.addEventListener('click', saveInstanceForm);
 
 // Run/Stop All Actions
 runAllSignupButton.addEventListener('click', async () => {
+  const count = await requestSignupCount();
+  if (count === null) return;
+
+  if (!Number.isInteger(count) || count < 1) {
+    openModal(t('invalidCountTitle'), `<p>${t('invalidCountMessage')}</p>`);
+    return;
+  }
+
   for (const inst of instances) {
     if (!inst.running) {
-      // Chạy signup 1 account làm ví dụ hoặc chạy bình thường
-      startInstanceProcess(inst.id, 'signup');
-      await new Promise(r => setTimeout(r, 500)); // Delay nhẹ
+      startInstanceProcess(inst.id, 'signup', { count }, false);
+      await new Promise((resolve) => setTimeout(resolve, 8000));
     }
   }
 });
@@ -842,8 +873,8 @@ runAllSignupButton.addEventListener('click', async () => {
 runAllLoginButton.addEventListener('click', async () => {
   for (const inst of instances) {
     if (!inst.running) {
-      startInstanceProcess(inst.id, 'login');
-      await new Promise(r => setTimeout(r, 500));
+      startInstanceProcess(inst.id, 'login', {}, false);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
 });
