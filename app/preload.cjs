@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('txw', {
   getInstanceSummary: (id) => ipcRenderer.invoke('instances:get-summary', id),
   getInstanceAccounts: (id) => ipcRenderer.invoke('instances:get-accounts', id),
   importInstanceAccounts: (id) => ipcRenderer.invoke('instances:import-accounts', id),
+  exportInstanceAccounts: (id) => ipcRenderer.invoke('instances:export-accounts', id),
   markInstanceAccountVoted: (id, email) => ipcRenderer.invoke('instances:mark-voted', id, email),
   toggleInstanceAccountStatus: (id, email, status) => ipcRenderer.invoke('instances:toggle-account-status', id, email, status),
   

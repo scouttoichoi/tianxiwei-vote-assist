@@ -36,10 +36,12 @@ const loginButton = document.getElementById('loginButton');
 const adsButton = document.getElementById('adsButton');
 const accountsButton = document.getElementById('accountsButton');
 const importAccountsButton = document.getElementById('importAccountsButton');
+const exportAccountsButton = document.getElementById('exportAccountsButton');
 const downloadTemplateButton = document.getElementById('downloadTemplateButton');
 const historyButton = document.getElementById('historyButton');
 const helpButtonMain = document.getElementById('helpButtonMain');
 const helpButton = document.getElementById('helpButton');
+const farmAdsGuideButton = document.getElementById('farmAdsGuideButton');
 
 // Emulator Choice DOMs
 const emulatorDialog = document.getElementById('emulatorDialog');
@@ -484,7 +486,10 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
       selectInstance(instanceId);
     }
 
-    await window.txw.startInstance(instanceId, mode, options);
+    const result = await window.txw.startInstance(instanceId, mode, options);
+    if (result && result.ok === false && result.error) {
+      appendInstanceLog(instanceId, `\n${result.error}\n`);
+    }
   } catch (error) {
     appendInstanceLog(instanceId, `\n${error.message || error}\n`);
   } finally {
@@ -765,6 +770,28 @@ function showHelp() {
     <p><strong>${t('helpCaptchaTitle')}</strong>: ${t('helpCaptchaBody')}</p>
     <p><strong>${t('helpAccountTitle')}</strong>: ${t('helpAccountBody')}</p>
     <p><strong>${t('helpNoteTitle')}</strong>: ${t('helpNoteBody')}</p>
+  `);
+}
+
+function showFarmAdsGuide() {
+  openModal(t('farmAdsGuideTitle'), `
+    <p>${t('farmAdsGuideIntro')}</p>
+    <p><strong>${t('farmAdsGuideBluestacksTitle')}</strong></p>
+    <ol>
+      <li>${t('farmAdsGuideBluestacksStep1')}</li>
+      <li>${t('farmAdsGuideBluestacksStep2')}</li>
+      <li>${t('farmAdsGuideBluestacksStep3')}</li>
+      <li>${t('farmAdsGuideBluestacksStep4')}</li>
+      <li>${t('farmAdsGuideBluestacksStep5')}</li>
+    </ol>
+    <p><strong>${t('farmAdsGuideLdplayerTitle')}</strong></p>
+    <ol>
+      <li>${t('farmAdsGuideLdplayerStep1')}</li>
+      <li>${t('farmAdsGuideLdplayerStep2')}</li>
+      <li>${t('farmAdsGuideLdplayerStep3')}</li>
+      <li>${t('farmAdsGuideLdplayerStep4')}</li>
+    </ol>
+    <p>${t('farmAdsGuideNote')}</p>
   `);
 }
 
@@ -1288,6 +1315,7 @@ accountsButton.addEventListener('click', showAccounts);
 historyButton.addEventListener('click', showHistory);
 helpButton.addEventListener('click', showHelp);
 helpButtonMain.addEventListener('click', showHelp);
+farmAdsGuideButton?.addEventListener('click', showFarmAdsGuide);
 
 // Emulator Selection Dialog Events
 closeEmulatorDialog.addEventListener('click', () => emulatorDialog.close());
@@ -1323,13 +1351,35 @@ importAccountsButton?.addEventListener('click', async () => {
     return;
   }
 
-  const message = t('importDoneMessage')
+  const importMessageTemplate = t('importDoneMessage');
+  let message = importMessageTemplate
     .replace('{created}', result.created)
     .replace('{updated}', result.updated)
-    .replace('{skipped}', result.skipped);
+    .replace('{skipped}', result.skipped)
+    .replace('{duplicated}', result.duplicated || 0);
+
+  if (!importMessageTemplate.includes('{duplicated}')) {
+    message += ` ${t('importDuplicateSummary').replace('{duplicated}', result.duplicated || 0)}`;
+  }
 
   openModal(t('importDoneTitle'), `<p>${message}</p>`);
   await refreshInstances();
+});
+
+exportAccountsButton?.addEventListener('click', async () => {
+  if (!selectedInstanceId) return;
+  const result = await window.txw.exportInstanceAccounts(selectedInstanceId);
+
+  if (!result || result.cancelled) {
+    openModal(t('exportDoneTitle'), `<p>${t('exportCancelled')}</p>`);
+    return;
+  }
+
+  const message = t('exportDoneMessage')
+    .replace('{count}', result.count || 0)
+    .replace('{path}', result.filePath);
+
+  openModal(t('exportDoneTitle'), `<p>${message}</p>`);
 });
 
 // Global instances management

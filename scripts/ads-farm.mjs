@@ -123,17 +123,17 @@ function execShellSafe(cmdStr) {
 // Tìm tọa độ phần tử trong XML dump của UIAutomator dựa trên các từ khóa tìm kiếm
 async function findClickableBounds(keywords) {
   try {
-    await adbExec('shell uiautomator dump /sdcard/window_dump.xml').catch(() => {});
+    await adbExec('shell uiautomator dump /sdcard/window_dump.xml').catch(() => { });
     const tempXmlPath = path.resolve('data/window_dump.xml');
-    await adbExec(`pull /sdcard/window_dump.xml "${tempXmlPath}"`).catch(() => {});
+    await adbExec(`pull /sdcard/window_dump.xml "${tempXmlPath}"`).catch(() => { });
     if (!fs.existsSync(tempXmlPath)) return null;
     const xmlContent = await fsPromises.readFile(tempXmlPath, 'utf8');
-    await adbExec('shell rm /sdcard/window_dump.xml').catch(() => {});
-    await fsPromises.rm(tempXmlPath, { force: true }).catch(() => {});
+    await adbExec('shell rm /sdcard/window_dump.xml').catch(() => { });
+    await fsPromises.rm(tempXmlPath, { force: true }).catch(() => { });
 
     // Biểu thức chính quy để phân tích cú pháp các thuộc tính node: text, content-desc, resource-id, bounds
     const nodeRegex = /<node[^>]*?(?:text="([^"]*)"|content-desc="([^"]*)"|resource-id="([^"]*)")[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/g;
-    
+
     let match;
     const candidates = [];
     while ((match = nodeRegex.exec(xmlContent)) !== null) {
@@ -144,16 +144,16 @@ async function findClickableBounds(keywords) {
       const y1 = parseInt(match[5], 10);
       const x2 = parseInt(match[6], 10);
       const y2 = parseInt(match[7], 10);
-      
+
       const centerX = Math.round((x1 + x2) / 2);
       const centerY = Math.round((y1 + y2) / 2);
-      
+
       candidates.push({ text, contentDesc, resourceId, centerX, centerY });
     }
-    
+
     // Tìm kiếm các phần tử theo danh sách từ khóa ưu tiên
     for (const kw of keywords) {
-      const found = candidates.find(c => 
+      const found = candidates.find(c =>
         (c.text && c.text.toLowerCase().includes(kw.toLowerCase())) ||
         (c.contentDesc && c.contentDesc.toLowerCase().includes(kw.toLowerCase())) ||
         (c.resourceId && c.resourceId.toLowerCase().includes(kw.toLowerCase()))
@@ -172,7 +172,7 @@ async function findClickableBounds(keywords) {
 // Tắt quảng cáo động dựa trên quét XML dump màn hình thực tế
 async function closeAdDynamically() {
   console.log(`🔍 [Ad Closer] Đang quét màn hình tìm nút tắt quảng cáo...`);
-  
+
   // 1. Quét tìm các nút đóng lớp phủ thông dụng trước (tắt, close, 닫기, bỏ qua, skip, X, x)
   // Việc đóng lớp phủ (ví dụ: Google Play overlay) phải được thực hiện TRƯỚC để tránh bị click nhầm quảng cáo
   const closeNode = await findClickableBounds(['닫기', 'close', 'dismiss', 'tắt', 'bỏ qua', 'skip']);
@@ -196,11 +196,37 @@ async function closeAdDynamically() {
     await tap(config.btnClaimRewardX, config.btnClaimRewardY);
   }
 }
+//
+async function handlePermissionDialogs() {
+  console.log(`🔍 [Permission Checker] Đang kiểm tra popup quyền Android...`);
 
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    const allowButton = await findClickableBounds([
+      'ALLOW',
+      'Allow',
+      'allow',
+      '허용',
+      'Cho phép',
+      'permission_allow_button'
+    ]);
+
+    if (allowButton) {
+      console.log(`👉 Phát hiện nút ALLOW tại (${allowButton.centerX}, ${allowButton.centerY}). Bấm cho phép...`);
+      await adbExec(`shell input tap ${allowButton.centerX} ${allowButton.centerY}`);
+      await sleep(1500);
+      continue;
+    }
+
+    await sleep(1000);
+  }
+
+  console.log(`ℹ️ Đã kiểm tra xong popup quyền Android.`);
+}
+//
 // Phát hiện và đóng popup quảng cáo trang chủ (Who is your bias) nếu xuất hiện
 async function handleWelcomePopup() {
   console.log(`🔍 [Popup Checker] Đang quét tìm popup quảng cáo trang chủ...`);
-  
+
   // Quét tối đa 6 lần (khoảng 9-10 giây) để chờ popup xuất hiện bất đồng bộ (tránh bất đồng bộ mạng chậm)
   for (let attempt = 1; attempt <= 6; attempt++) {
     console.log(`🔍 [Popup Checker] Lần quét thứ ${attempt}/6...`);
@@ -221,7 +247,7 @@ async function handleWelcomePopup() {
     }
     await sleep(1500); // Chờ 1.5 giây trước khi quét lại
   }
-  
+
   console.log(`ℹ️ Không phát hiện popup trang chủ Bugs sau 6 lần quét.`);
   return false;
 }
@@ -269,7 +295,7 @@ async function resolveAdbPath() {
   const platformDir = isWin ? 'win' : 'mac';
   const exeName = isWin ? 'adb.exe' : 'adb';
   let bundledAdbPath = path.join(scriptDir, '..', 'app', 'assets', 'bin', platformDir, exeName);
-  
+
   if (bundledAdbPath.includes('app.asar')) {
     bundledAdbPath = bundledAdbPath.replace('app.asar', 'app.asar.unpacked');
   }
@@ -282,7 +308,7 @@ async function resolveAdbPath() {
         // Sử dụng exec trực tiếp không dùng Shell để cấp quyền
         const chmodChild = spawn('chmod', ['+x', bundledAdbPath], { windowsHide: true });
         await new Promise((res) => chmodChild.on('exit', res));
-        
+
         const xattrChild = spawn('xattr', ['-d', 'com.apple.quarantine', bundledAdbPath], { windowsHide: true });
         await new Promise((res) => xattrChild.on('exit', res));
         console.log(`🔍 DEBUG: resolveAdbPath: Đã mở khóa thành công!`);
@@ -307,7 +333,7 @@ async function resolveAdbPath() {
         console.log(`🔍 DEBUG: resolveAdbPath: Tìm thấy Android SDK Mac và đã phân quyền!`);
         adbPathCached = macPath;
         return macPath;
-      } catch {}
+      } catch { }
     }
   } else if (isWin) {
     const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
@@ -360,15 +386,15 @@ async function setupAdbConnection(emulatorType) {
   try {
     if (emulatorType === 'ldplayer' || emulatorType === 'bluestacks') {
       console.log(`🔌 Đang kết nối giả lập cổng 5555...`);
-      await execShellSafe(`${adbCmd} connect 127.0.0.1:5555`).catch(() => {});
+      await execShellSafe(`${adbCmd} connect 127.0.0.1:5555`).catch(() => { });
     } else if (emulatorType === 'nox') {
       console.log(`🔌 Đang kết nối giả lập cổng 62001 (Nox)...`);
-      await execShellSafe(`${adbCmd} connect 127.0.0.1:62001`).catch(() => {});
+      await execShellSafe(`${adbCmd} connect 127.0.0.1:62001`).catch(() => { });
     } else if (emulatorType === 'avd_genymotion') {
       console.log(`🔌 Đang quét thiết bị giả lập...`);
-      await execShellSafe(`${adbCmd} connect 127.0.0.1:5555`).catch(() => {});
+      await execShellSafe(`${adbCmd} connect 127.0.0.1:5555`).catch(() => { });
     }
-  } catch {}
+  } catch { }
 
   await sleep(1000);
 
@@ -395,14 +421,14 @@ async function setupAdbConnection(emulatorType) {
     }
 
     console.log(`✅ Kết nối thành công tới máy ảo: [${activeDeviceId}]`);
-    
+
     // Cưỡng bức màn hình giả lập luôn xoay dọc để đảm bảo tọa độ click hoạt động ổn định
     try {
       console.log(`📐 Đang tự động cấu hình cưỡng bức màn hình dọc (Portrait)...`);
-      await adbExec('shell settings put system accelerometer_rotation 0').catch(() => {});
-      await adbExec('shell settings put system user_rotation 0').catch(() => {});
+      await adbExec('shell settings put system accelerometer_rotation 0').catch(() => { });
+      await adbExec('shell settings put system user_rotation 0').catch(() => { });
       await sleep(1500); // Chờ 1.5s để giả lập hoàn tất xoay màn hình dọc
-    } catch {}
+    } catch { }
 
     return true;
   } catch {
@@ -433,7 +459,7 @@ async function tap(x, y) {
 
   const scaledX = Math.round((x / 1440) * realWidth);
   const scaledY = Math.round((y / 2560) * realHeight);
-  
+
   console.log(`🖱️ ADB Tap: Tọa độ gốc (${x}, ${y}) -> Tọa độ quy đổi thực tế (${scaledX}, ${scaledY})`);
   await adbExec(`shell input tap ${scaledX} ${scaledY}`);
 }
@@ -453,7 +479,7 @@ async function isWarpConnected() {
 // Xoay IP Cloudflare WARP trong giả lập
 async function rotateWarpIP() {
   console.log(`🌐 Đang mở Cloudflare WARP trong giả lập để xoay IP...`);
-  await adbExec(`shell am start -n com.cloudflare.onedotonedotonedotone/com.cloudflare.app.presentation.main.SplashActivity`).catch(() => {});
+  await adbExec(`shell am start -n com.cloudflare.onedotonedotonedotone/com.cloudflare.app.presentation.main.SplashActivity`).catch(() => { });
   await sleep(4000);
 
   // Kiểm tra trạng thái kết nối thực tế
@@ -488,13 +514,13 @@ async function rotateWarpIP() {
   await sleep(15000);
 
   // Nhấn phím HOME để ẩn ứng dụng WARP xuống chạy ngầm dưới nền thay vì dùng force-stop (force-stop sẽ diệt tiến trình VPN)
-  await adbExec('shell input keyevent 3').catch(() => {});
+  await adbExec('shell input keyevent 3').catch(() => { });
   await sleep(1000);
 }
 
 // Tạo ngẫu nhiên Android Device ID mới
 function generateRandomAndroidId() {
-  return Array.from({ length: 16 }, () => 
+  return Array.from({ length: 16 }, () =>
     Math.floor(Math.random() * 16).toString(16)
   ).join('');
 }
@@ -503,14 +529,14 @@ function generateRandomAndroidId() {
 async function checkLoginSuccess() {
   try {
     await adbExec('shell uiautomator dump /sdcard/window_dump.xml');
-    
+
     const tempXmlPath = path.resolve('data/window_dump.xml');
     await adbExec(`pull /sdcard/window_dump.xml "${tempXmlPath}"`);
-    
+
     const xmlContent = await fsPromises.readFile(tempXmlPath, 'utf8');
-    
-    await adbExec('shell rm /sdcard/window_dump.xml').catch(() => {});
-    await fsPromises.rm(tempXmlPath, { force: true }).catch(() => {});
+
+    await adbExec('shell rm /sdcard/window_dump.xml').catch(() => { });
+    await fsPromises.rm(tempXmlPath, { force: true }).catch(() => { });
 
     const hasPasswordInput = xmlContent.includes('비밀번호') || xmlContent.includes('password') || xmlContent.includes('passwd');
     const hasLoginIndicator = xmlContent.includes('로그인') || xmlContent.includes('login') || xmlContent.includes('userId');
@@ -564,10 +590,10 @@ async function runSchedulerLoop() {
     try {
       // Đảm bảo xoay dọc màn hình trước khi bắt đầu chu kỳ mới
       try {
-        await adbExec('shell settings put system accelerometer_rotation 0').catch(() => {});
-        await adbExec('shell settings put system user_rotation 0').catch(() => {});
+        await adbExec('shell settings put system accelerometer_rotation 0').catch(() => { });
+        await adbExec('shell settings put system user_rotation 0').catch(() => { });
         await sleep(1000);
-      } catch {}
+      } catch { }
 
       // 1. Dọn sạch dữ liệu cũ của ứng dụng vote trước
       console.log(`🧹 Dọn sạch dữ liệu cũ của ứng dụng vote...`);
@@ -586,14 +612,18 @@ async function runSchedulerLoop() {
         'android.permission.POST_NOTIFICATIONS',
         'android.permission.BLUETOOTH_CONNECT',
         'android.permission.READ_PHONE_STATE',
+        'android.permission.READ_EXTERNAL_STORAGE',
+        'android.permission.WRITE_EXTERNAL_STORAGE',
+        'android.permission.READ_MEDIA_IMAGES',
+        'android.permission.READ_MEDIA_VIDEO',
         'android.permission.READ_MEDIA_AUDIO',
         'android.permission.RECORD_AUDIO'
       ];
       for (const perm of permissions) {
-        await adbExec(`shell pm grant ${config.packageName} ${perm}`).catch(() => {});
+        await adbExec(`shell pm grant ${config.packageName} ${perm}`).catch(() => { });
       }
-      await adbExec(`shell appops set ${config.packageName} SYSTEM_ALERT_WINDOW allow`).catch(() => {});
-      await adbExec(`shell cmd deviceidle whitelist +${config.packageName}`).catch(() => {});
+      await adbExec(`shell appops set ${config.packageName} SYSTEM_ALERT_WINDOW allow`).catch(() => { });
+      await adbExec(`shell cmd deviceidle whitelist +${config.packageName}`).catch(() => { });
       await sleep(1000);
 
       // 3. Xoay IP Cloudflare WARP (Bật VPN sau khi cấu hình hệ thống đã ổn định)
@@ -604,8 +634,11 @@ async function runSchedulerLoop() {
       console.log(`⏳ Đang chờ app load hẳn vào màn hình chính (tránh kẹt)...`);
       await sleep(Math.max(config.appLoadDelay * 1000, 8000)); // Đảm bảo chờ tối thiểu 8s cho trang chủ load mượt mà
 
+      await handlePermissionDialogs();
+      await handleWelcomePopup();
+
       console.log(`✍️ Bắt đầu tự động đăng nhập...`);
-      
+
       console.log(`👉 Mở trang tài khoản (tọa độ: ${config.btnAccountX}, ${config.btnAccountY})`);
       await tap(config.btnAccountX, config.btnAccountY);
       await sleep(4000);
@@ -668,12 +701,12 @@ async function runSchedulerLoop() {
       }
       console.log(`⏳ Đang chờ xem hết quảng cáo 1 trong 1 phút...`);
       await sleep(config.adDuration * 1000);
-      
+
       // KHI XEM XONG AD 1, TIM ĐÃ ĐƯỢC CẬP NHẬT TRÊN HỆ THỐNG. CHỈ CẦN FORCE-CLOSE APP VÀ KHỞI ĐỘNG LẠI ĐỂ XEM AD 2!
       console.log(`❌ Hết thời gian quảng cáo 1 -> Diệt toàn bộ app Bugs, Play Store và Trình duyệt để dọn sạch màn hình...`);
-      await adbExec(`shell am force-stop ${config.packageName}`).catch(() => {});
-      await adbExec(`shell am force-stop com.android.vending`).catch(() => {});
-      await adbExec(`shell am force-stop com.android.chrome`).catch(() => {});
+      await adbExec(`shell am force-stop ${config.packageName}`).catch(() => { });
+      await adbExec(`shell am force-stop com.android.vending`).catch(() => { });
+      await adbExec(`shell am force-stop com.android.chrome`).catch(() => { });
       await sleep(2000);
 
       // Khởi động lại ứng dụng Bugs và đi vào Trạm sạc tim để xem tiếp Ad 2
@@ -683,6 +716,7 @@ async function runSchedulerLoop() {
       await sleep(Math.max(config.appLoadDelay * 1000, 8000));
 
       // Đóng popup quảng cáo nếu xuất hiện
+      await handlePermissionDialogs();
       await handleWelcomePopup();
 
       console.log(`📺 Đang điều hướng lại đến Trạm sạc tim...`);
@@ -709,12 +743,12 @@ async function runSchedulerLoop() {
       }
       console.log(`⏳ Đang chờ xem hết quảng cáo 2 trong 1 phút...`);
       await sleep(config.adDuration * 1000);
-      
+
       // Tương tự, sau khi xem xong Ad 2, tim đã cập nhật, ta tắt hẳn app để chuẩn bị cho chu kỳ tiếp theo
       console.log(`❌ Hết thời gian quảng cáo 2 -> Diệt toàn bộ app Bugs, Play Store và Trình duyệt để chuẩn bị chu kỳ mới...`);
-      await adbExec(`shell am force-stop ${config.packageName}`).catch(() => {});
-      await adbExec(`shell am force-stop com.android.vending`).catch(() => {});
-      await adbExec(`shell am force-stop com.android.chrome`).catch(() => {});
+      await adbExec(`shell am force-stop ${config.packageName}`).catch(() => { });
+      await adbExec(`shell am force-stop com.android.vending`).catch(() => { });
+      await adbExec(`shell am force-stop com.android.chrome`).catch(() => { });
       await sleep(2000);
 
       console.log(`✅ [Thành công] Tài khoản [${nextAccount.email}] đã xem xong 2 Ads và nhận tim.`);
@@ -722,10 +756,10 @@ async function runSchedulerLoop() {
     } catch (err) {
       console.error(`❌ [Lỗi] Gặp sự cố khi tự động chạy tài khoản ${nextAccount.email}:`, err.message);
     } finally {
-      await adbExec(`shell am force-stop ${config.packageName}`).catch(() => {});
-      await adbExec(`shell am force-stop com.android.vending`).catch(() => {});
-      await adbExec(`shell am force-stop com.android.chrome`).catch(() => {});
-      
+      await adbExec(`shell am force-stop ${config.packageName}`).catch(() => { });
+      await adbExec(`shell am force-stop com.android.vending`).catch(() => { });
+      await adbExec(`shell am force-stop com.android.chrome`).catch(() => { });
+
       if (success) {
         nextAccount.lastAdWatchAt = new Date().toISOString();
         nextAccount.lastVoteCount = (nextAccount.lastVoteCount || 0) + 20;
@@ -762,14 +796,14 @@ function getNextEligibleAccount(accounts) {
   const now = Date.now();
   const eligible = accounts.filter(acc => {
     if (['disabled', 'deactive'].includes(acc.status)) return false;
-    
+
     if (!acc.lastAdWatchAt) return true;
     const elapsed = now - new Date(acc.lastAdWatchAt).getTime();
     return elapsed >= 30 * 60 * 1000;
   });
-  
+
   if (eligible.length === 0) return null;
-  
+
   return eligible.sort((a, b) => {
     const timeA = a.lastAdWatchAt ? new Date(a.lastAdWatchAt).getTime() : 0;
     const timeB = b.lastAdWatchAt ? new Date(b.lastAdWatchAt).getTime() : 0;

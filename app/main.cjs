@@ -7,6 +7,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'TianXiweiVoteAssistAp
 
 let mainWindow;
 const activeWorkers = new Map(); // key: instanceId, value: childProcess
+const stoppingWorkers = new Set(); // key: instanceId, true when user intentionally stops a worker
 let lastNotificationKey = '';
 let setupPromise = null;
 
@@ -108,19 +109,41 @@ function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '', o
 
     child.stdout?.on('data', (data) => {
       const text = data.toString();
+      console.log(`[Worker:${instanceId}] ${text.trim()}`);
       send('worker-log', { instanceId, text });
       notifyIfNeeded(text, instanceName);
     });
     child.stderr?.on('data', (data) => {
       const text = data.toString();
+      console.error(`[Worker:${instanceId}:stderr] ${text.trim()}`);
       send('worker-log', { instanceId, text });
       notifyIfNeeded(text, instanceName);
     });
-    child.on('exit', (code) => {
+    child.on('error', (error) => {
+      activeWorkers.delete(instanceId);
+      stoppingWorkers.delete(instanceId);
+      send('run-state', { instanceId, running: false });
+      send('data-updated', { instanceId });
+      reject(error);
+    });
+    child.on('exit', (code, signal) => {
+      const wasStopped = stoppingWorkers.delete(instanceId);
       activeWorkers.delete(instanceId);
       send('run-state', { instanceId, running: false });
       send('data-updated', { instanceId });
-      code === 0 ? resolve() : reject(new Error(`Worker exited with code ${code}`));
+
+      if (wasStopped) {
+        resolve();
+        return;
+      }
+
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const reason = signal ? `signal ${signal}` : `code ${code}`;
+      reject(new Error(`Worker exited with ${reason}`));
     });
   });
 }
@@ -560,6 +583,31 @@ function importedAccountFromRow(row, importedAt) {
   };
 }
 
+function koreaDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
+function hasVotedTodayKorea(lastVotedAt) {
+  if (!lastVotedAt) return false;
+  return koreaDateKey(lastVotedAt) === koreaDateKey();
+}
+
+function accountToExportRow(account) {
+  return {
+    user: account.email || '',
+    pass: account.password || '',
+    voted_today: hasVotedTodayKorea(account.lastVotedAt) ? 'yes' : 'no'
+  };
+}
+
 // --- IPC HANDLERS ---
 
 ipcMain.handle('setup:first-run', async () => {
@@ -581,14 +629,7 @@ ipcMain.handle('instances:list', async () => {
     const accounts = await readAccounts(inst.id);
     const summary = await readScoreSummary(inst.id);
 
-    const votedTodayCount = accounts.filter(acc => {
-      if (!acc.lastVotedAt) return false;
-      const date = new Date(acc.lastVotedAt);
-      const today = new Date();
-      return date.getFullYear() === today.getFullYear() &&
-        date.getMonth() === today.getMonth() &&
-        date.getDate() === today.getDate();
-    }).length;
+    const votedTodayCount = accounts.filter(acc => hasVotedTodayKorea(acc.lastVotedAt)).length;
 
     return {
       ...inst,
@@ -698,7 +739,12 @@ ipcMain.handle('instances:update-config', async (_event, instanceId, name, proxy
 
 // Điều khiển tiến trình của Instance
 ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {}) => {
-  if (activeWorkers.has(instanceId)) throw new Error('Phiên bản này đang chạy.');
+  if (activeWorkers.has(instanceId)) {
+    return {
+      ok: false,
+      error: 'Phiên bản này đang chạy.'
+    };
+  }
 
   const settings = await loadGlobalSettings();
   const inst = settings.instances.find(i => i.id === instanceId);
@@ -732,6 +778,14 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
   try {
     await ensureSetupWorkerReady();
     await ensureInstanceConfig(instanceId, settings);
+
+    if (stoppingWorkers.has(instanceId)) {
+      return {
+        ok: false,
+        stopped: true
+      };
+    }
+
     await runUtility(
       path.join(__dirname, 'runner.cjs'),
       runnerArgs,
@@ -742,8 +796,22 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
         startingChild = child;
       }
     );
+    return {
+      ok: true
+    };
+  } catch (error) {
+    const message = error?.stack || error?.message || String(error);
+    send('worker-log', {
+      instanceId,
+      text: `\n${message}\n`
+    });
+    return {
+      ok: false,
+      error: error?.message || String(error)
+    };
   } finally {
     activeWorkers.delete(instanceId);
+    stoppingWorkers.delete(instanceId);
     send('data-updated', { instanceId });
     send('run-state', { instanceId, running: false, mode: command });
   }
@@ -752,6 +820,7 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
 ipcMain.handle('instances:stop', async (_event, instanceId) => {
   if (!activeWorkers.has(instanceId)) return false;
   const child = activeWorkers.get(instanceId);
+  stoppingWorkers.add(instanceId);
   child.kill();
   activeWorkers.delete(instanceId);
   send('run-state', { instanceId, running: false });
@@ -787,6 +856,8 @@ ipcMain.handle('instances:import-accounts', async (_event, instanceId) => {
   let created = 0;
   let updated = 0;
   let skipped = 0;
+  let duplicated = 0;
+  const seenEmails = new Set();
 
   for (const row of rows) {
     const nextAccount = importedAccountFromRow(row, importedAt);
@@ -797,9 +868,17 @@ ipcMain.handle('instances:import-accounts', async (_event, instanceId) => {
     }
 
     const key = nextAccount.email.toLowerCase();
+    if (seenEmails.has(key)) {
+      duplicated += 1;
+      skipped += 1;
+      continue;
+    }
+    seenEmails.add(key);
+
     const existing = byEmail.get(key);
 
     if (existing) {
+      duplicated += 1;
       Object.assign(existing, {
         ...existing,
         password: nextAccount.password,
@@ -823,7 +902,52 @@ ipcMain.handle('instances:import-accounts', async (_event, instanceId) => {
     cancelled: false,
     created,
     updated,
-    skipped
+    skipped,
+    duplicated
+  };
+});
+
+ipcMain.handle('instances:export-accounts', async (_event, instanceId) => {
+  const settings = await loadGlobalSettings();
+  const inst = settings.instances.find((item) => item.id === instanceId);
+  const safeName = String(inst?.name || instanceId || 'instance')
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .slice(0, 60);
+
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export accounts to Excel',
+    defaultPath: `${safeName || 'instance'}-accounts.xlsx`,
+    filters: [
+      { name: 'Excel Files', extensions: ['xlsx'] }
+    ]
+  });
+
+  if (result.canceled || !result.filePath) {
+    return { cancelled: true };
+  }
+
+  const accounts = await readAccounts(instanceId);
+  const rows = accounts.map(accountToExportRow);
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.json_to_sheet(rows, {
+    header: ['user', 'pass', 'voted_today']
+  });
+
+  sheet['!cols'] = [
+    { wch: 32 },
+    { wch: 24 },
+    { wch: 14 }
+  ];
+
+  XLSX.utils.book_append_sheet(workbook, sheet, 'accounts');
+  XLSX.writeFile(workbook, result.filePath);
+
+  return {
+    cancelled: false,
+    filePath: result.filePath,
+    count: rows.length
   };
 });
 
