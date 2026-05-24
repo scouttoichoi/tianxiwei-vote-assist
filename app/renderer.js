@@ -67,6 +67,7 @@ function applyLanguage(language) {
   currentLanguage = language;
   localStorage.setItem('language', language);
   document.documentElement.lang = language;
+  updateFormatters(language);
 
   document.querySelectorAll('[data-i18n]').forEach((element) => {
     element.textContent = t(element.dataset.i18n);
@@ -84,34 +85,55 @@ function applyLanguage(language) {
   renderInstancesList();
 
   if (selectedInstanceId) {
-    const log = instanceLogs.get(selectedInstanceId) || '';
-    if (!log.trim()) {
-      logOutput.textContent = t('idleLog');
+    const selected = instances.find((inst) => inst.id === selectedInstanceId);
+    if (selected) {
+      updateSelectedInstanceDashboard(selected);
+    } else {
+      const log = instanceLogs.get(selectedInstanceId) || '';
+      if (!log.trim()) {
+        logOutput.textContent = t('idleLog');
+      }
     }
   }
 }
 
 const numberFormat = new Intl.NumberFormat('en-US');
-const dateTimeFormat = new Intl.DateTimeFormat('vi-VN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false
-});
-const dateFormat = new Intl.DateTimeFormat('vi-VN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit'
-});
-const timeFormat = new Intl.DateTimeFormat('vi-VN', {
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false
-});
+let dateTimeFormat;
+let dateFormat;
+let timeFormat;
+
+function updateFormatters(lang) {
+  const localeMap = {
+    vi: 'vi-VN',
+    zh: 'zh-CN',
+    ko: 'ko-KR',
+    en: 'en-US'
+  };
+  const locale = localeMap[lang] || 'vi-VN';
+  dateTimeFormat = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  dateFormat = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  timeFormat = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+}
+
+// Initialize formatters
+updateFormatters(currentLanguage);
 
 function formatVote(value) {
   return value ? numberFormat.format(value) : '-';
@@ -296,13 +318,13 @@ async function updateSelectedInstanceDashboard(inst) {
     adsButton.disabled = inst.runningMode !== 'ads';
 
     if (inst.runningMode === 'signup') {
-      signupButton.innerHTML = `<span>⏹ DỪNG ĐĂNG KÝ VÀ VOTE</span><small>Bấm để dừng tiến trình ngay lập tức</small>`;
+      signupButton.innerHTML = `<span>${t('stopSignup')}</span><small>${t('stopSignupHint')}</small>`;
       signupButton.classList.add('btnDashboardStop');
     } else if (inst.runningMode === 'login') {
-      loginButton.innerHTML = `<span>⏹ DỪNG VOTE TÀI KHOẢN CŨ</span><small>Bấm để dừng tiến trình ngay lập tức</small>`;
+      loginButton.innerHTML = `<span>${t('stopLogin')}</span><small>${t('stopLoginHint')}</small>`;
       loginButton.classList.add('btnDashboardStop');
     } else if (inst.runningMode === 'ads') {
-      adsButton.innerHTML = `<span>⏹ DỪNG FARM ADS MÁY ẢO</span><small>Bấm để tắt và giải phóng máy ảo</small>`;
+      adsButton.innerHTML = `<span>${t('stopAds')}</span><small>${t('stopAdsHint')}</small>`;
       adsButton.classList.add('btnDashboardStop');
     }
   } else {
@@ -420,7 +442,7 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
     const badge = row.querySelector('.badgeStatus');
     if (badge) {
       badge.className = 'badgeStatus runningAds';
-      badge.textContent = mode === 'ads' ? 'Đang farm ads...' : 'Đang chạy...';
+      badge.textContent = mode === 'ads' ? t('runningAds') : t('running');
     }
     const rowActions = row.querySelector('.rowActions');
     if (rowActions && !rowActions.querySelector('.btnRowStop')) {
@@ -445,13 +467,13 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
     adsButton.disabled = mode !== 'ads';
 
     if (mode === 'signup') {
-      signupButton.innerHTML = `<span>⏹ DỪNG ĐĂNG KÝ VÀ VOTE</span><small>Bấm để dừng tiến trình ngay lập tức</small>`;
+      signupButton.innerHTML = `<span>${t('stopSignup')}</span><small>${t('stopSignupHint')}</small>`;
       signupButton.classList.add('btnDashboardStop');
     } else if (mode === 'login') {
-      loginButton.innerHTML = `<span>⏹ DỪNG VOTE TÀI KHOẢN CŨ</span><small>Bấm để dừng tiến trình ngay lập tức</small>`;
+      loginButton.innerHTML = `<span>${t('stopLogin')}</span><small>${t('stopLoginHint')}</small>`;
       loginButton.classList.add('btnDashboardStop');
     } else if (mode === 'ads') {
-      adsButton.innerHTML = `<span>⏹ DỪNG FARM ADS MÁY ẢO</span><small>Bấm để tắt và giải phóng máy ảo</small>`;
+      adsButton.innerHTML = `<span>${t('stopAds')}</span><small>${t('stopAdsHint')}</small>`;
       adsButton.classList.add('btnDashboardStop');
     }
   }
@@ -684,8 +706,8 @@ async function showAccounts() {
       const email = button.dataset.toggleStatusEmail;
       const newStatus = button.dataset.newStatus;
       const confirmMsg = newStatus === 'active'
-        ? `Kích hoạt lại tài khoản ${email}?`
-        : `Hủy kích hoạt (Khóa) tài khoản ${email}?`;
+        ? t('confirmActivateAccount').replace('{email}', email)
+        : t('confirmDeactivateAccount').replace('{email}', email);
 
       const ok = window.confirm(confirmMsg);
       if (!ok) return;
@@ -764,6 +786,280 @@ function translateWorkerLog(text) {
   return lines.map((line) => {
     const trimmed = line.trim();
     if (!trimmed) return line;
+
+    // --- Ads Farm Logs Translation ---
+    if (trimmed.includes('🚀 KHỞI ĐỘNG TIẾN TRÌNH FARM ADS TỰ ĐỘNG')) {
+      return t('adsFarmStarted');
+    }
+
+    const emuMatch = trimmed.match(/Giả lập lựa chọn:\s*(.+)$/i);
+    if (emuMatch) {
+      return t('adsFarmEmulatorChoice').replace('{emulator}', emuMatch[1]);
+    }
+
+    if (trimmed.includes('Đang kết nối giả lập cổng 5555...')) {
+      return t('adsFarmConnecting5555');
+    }
+
+    if (trimmed.includes('Đang kết nối giả lập cổng 62001 (Nox)...')) {
+      return t('adsFarmConnecting62001');
+    }
+
+    if (trimmed.includes('Đang quét thiết bị giả lập...')) {
+      return t('adsFarmScanningEmulators');
+    }
+
+    const connSuccessMatch = trimmed.match(/Kết nối thành công tới máy ảo:\s*\[(.+)\]/i);
+    if (connSuccessMatch) {
+      return t('adsFarmConnectSuccess').replace('{device}', connSuccessMatch[1]);
+    }
+
+    if (trimmed.includes('Đang tự động cấu hình cưỡng bức màn hình dọc (Portrait)...')) {
+      return t('adsFarmForcePortrait');
+    }
+
+    const resMatch = trimmed.match(/Độ phân giải thực tế màn hình máy ảo:\s*(\d+)x(\d+)/i);
+    if (resMatch) {
+      return t('adsFarmResolution').replace('{width}', resMatch[1]).replace('{height}', resMatch[2]);
+    }
+
+    const adbTapMatch = trimmed.match(/ADB Tap: Tọa độ gốc \((\d+),\s*(\d+)\)\s*->\s*Tọa độ quy đổi thực tế \((\d+),\s*(\d+)\)/i);
+    if (adbTapMatch) {
+      return t('adsFarmAdbTap')
+        .replace('{x}', adbTapMatch[1])
+        .replace('{y}', adbTapMatch[2])
+        .replace('{scaledX}', adbTapMatch[3])
+        .replace('{scaledY}', adbTapMatch[4]);
+    }
+
+    if (trimmed.includes('Đang mở Cloudflare WARP trong giả lập để xoay IP...')) {
+      return t('adsFarmWarpOpening');
+    }
+
+    if (trimmed.includes('Kiểm tra hệ thống: WARP hiện tại ĐANG KẾT NỐI')) {
+      return t('adsFarmWarpConnected');
+    }
+
+    if (trimmed.includes('Kiểm tra hệ thống: WARP hiện tại ĐANG NGẮT KẾT NỐI')) {
+      return t('adsFarmWarpDisconnected');
+    }
+
+    if (trimmed.includes('WARP đang bật -> Bấm để TẮT kết nối cũ...')) {
+      return t('adsFarmWarpDisconnecting');
+    }
+
+    if (trimmed.includes('Đang kiểm tra hộp thoại tạm dừng của WARP...')) {
+      return t('adsFarmWarpCheckingPause');
+    }
+
+    const pauseMatch = trimmed.match(/Phát hiện hộp thoại tạm dừng\. Bấm "Until I turn it back on" tại \((\d+),\s*(\d+)\)/i);
+    if (pauseMatch) {
+      return t('adsFarmWarpDetectedPauseDialog').replace('{x}', pauseMatch[1]).replace('{y}', pauseMatch[2]);
+    }
+
+    if (trimmed.includes('Không thấy hộp thoại tạm dừng (có thể đã tắt trực tiếp). Chờ thêm...')) {
+      return t('adsFarmWarpNoPauseDialog');
+    }
+
+    if (trimmed.includes('Bấm để BẬT lại kết nối mới (Xoay IP sạch)...')) {
+      return t('adsFarmWarpConnectingNew');
+    }
+
+    if (trimmed.includes('WARP đang tắt -> Chỉ bấm 1 lần duy nhất để BẬT kết nối mới...')) {
+      return t('adsFarmWarpConnectingOnce');
+    }
+
+    if (trimmed.includes('Đang chờ WARP thiết lập kết nối VPN an toàn (15 giây)...')) {
+      return t('adsFarmWarpWaitingConnection');
+    }
+
+    if (trimmed.includes('Dọn sạch dữ liệu cũ của ứng dụng vote...')) {
+      return t('adsFarmClearingApp');
+    }
+
+    const fakeIdMatch = trimmed.match(/Đã fake Device ID mới:\s*\[(.+)\]/i);
+    if (fakeIdMatch) {
+      return t('adsFarmFakeDeviceID').replace('{id}', fakeIdMatch[1]);
+    }
+
+    if (trimmed.includes('Đang tự động cấu hình quyền & pin cho ứng dụng Bugs qua ADB...')) {
+      return t('adsFarmConfiguringPermissions');
+    }
+
+    if (trimmed.includes('Khởi chạy ứng dụng vote...')) {
+      return t('adsFarmLaunchingApp');
+    }
+
+    if (trimmed.includes('Khởi chạy lại ứng dụng...')) {
+      return t('adsFarmRelaunchingApp');
+    }
+
+    if (trimmed.includes('Đang chờ app load hẳn vào màn hình chính (tránh kẹt)...')) {
+      return t('adsFarmWaitingAppLoad');
+    }
+
+    if (trimmed.includes('Đang chờ app load hẳn vào màn hình chính...')) {
+      return t('adsFarmWaitingAppLoadShort');
+    }
+
+    if (trimmed.includes('Bắt đầu tự động đăng nhập...')) {
+      return t('adsFarmStartingLogin');
+    }
+
+    const openAccountMatch = trimmed.match(/Mở trang tài khoản \(tọa độ:\s*(\d+),\s*(\d+)\)/i);
+    if (openAccountMatch) {
+      return t('adsFarmOpeningAccountPage').replace('{x}', openAccountMatch[1]).replace('{y}', openAccountMatch[2]);
+    }
+
+    const openLoginMatch = trimmed.match(/Mở danh sách đăng nhập \(tọa độ:\s*(\d+),\s*(\d+)\)/i);
+    if (openLoginMatch) {
+      return t('adsFarmOpeningLoginList').replace('{x}', openLoginMatch[1]).replace('{y}', openLoginMatch[2]);
+    }
+
+    const chooseBugsMatch = trimmed.match(/Chọn đăng nhập Bugs \(tọa độ:\s*(\d+),\s*(\d+)\)/i);
+    if (chooseBugsMatch) {
+      return t('adsFarmSelectingBugsLogin').replace('{x}', chooseBugsMatch[1]).replace('{y}', chooseBugsMatch[2]);
+    }
+
+    const typeEmailMatch = trimmed.match(/Điền Email vào ô tài khoản \(tọa độ:\s*(\d+),\s*(\d+)\)/i);
+    if (typeEmailMatch) {
+      return t('adsFarmTypingEmail').replace('{x}', typeEmailMatch[1]).replace('{y}', typeEmailMatch[2]);
+    }
+
+    const typePassMatch = trimmed.match(/Điền Mật khẩu vào ô mật khẩu \(tọa độ:\s*(\d+),\s*(\d+)\)/i);
+    if (typePassMatch) {
+      return t('adsFarmTypingPassword').replace('{x}', typePassMatch[1]).replace('{y}', typePassMatch[2]);
+    }
+
+    const submitLoginMatch = trimmed.match(/Gửi đăng nhập \(tọa độ:\s*(\d+),\s*(\d+)\)/i);
+    if (submitLoginMatch) {
+      return t('adsFarmSubmittingLogin').replace('{x}', submitLoginMatch[1]).replace('{y}', submitLoginMatch[2]);
+    }
+
+    if (trimmed.includes('Đang kiểm tra trạng thái xác thực tài khoản...')) {
+      return t('adsFarmCheckingAuthStatus');
+    }
+
+    if (trimmed.includes('Phát hiện vẫn kẹt ở màn hình Đăng nhập. Login thất bại!')) {
+      return t('adsFarmAuthFailed');
+    }
+
+    if (trimmed.includes('Vượt qua màn hình Đăng nhập thành công!')) {
+      return t('adsFarmAuthSuccess');
+    }
+
+    const deactiveMatch = trimmed.match(/Tài khoản\s*\[(.+)\]\s*đã bị xóa hoặc sai pass/i);
+    if (deactiveMatch) {
+      return t('adsFarmAccountDeactivated').replace('{email}', deactiveMatch[1]);
+    }
+
+    if (trimmed.includes('Đang điều hướng đến Trạm sạc tim...')) {
+      return t('adsFarmNavigatingHeartStation');
+    }
+
+    if (trimmed.includes('Đang điều hướng lại đến Trạm sạc tim...')) {
+      return t('adsFarmRonavigatingHeartStation');
+    }
+
+    const clickSettingsMatch = trimmed.match(/Nhấp vào Cài đặt \(tọa độ:\s*(\d+),\s*(\d+)\)/i);
+    if (clickSettingsMatch) {
+      return t('adsFarmClickingSettings').replace('{x}', clickSettingsMatch[1]).replace('{y}', clickSettingsMatch[2]);
+    }
+
+    const clickHeartMatch = trimmed.match(/Nhấp vào Trạm sạc tim \(tọa độ:\s*(\d+),\s*(\d+)\)/i);
+    if (clickHeartMatch) {
+      return t('adsFarmClickingHeartStation').replace('{x}', clickHeartMatch[1]).replace('{y}', clickHeartMatch[2]);
+    }
+
+    if (trimmed.includes('Bắt đầu xem quảng cáo lượt 1...')) {
+      return t('adsFarmStartingAd1');
+    }
+
+    if (trimmed.includes('Bắt đầu xem quảng cáo lượt 2...')) {
+      return t('adsFarmStartingAd2');
+    }
+
+    const ad1DumpMatch = trimmed.match(/Tìm thấy nút Ad 1 qua UI Dump tại \((\d+),\s*(\d+)\)/i);
+    if (ad1DumpMatch) {
+      return t('adsFarmFoundAd1Dump').replace('{x}', ad1DumpMatch[1]).replace('{y}', ad1DumpMatch[2]);
+    }
+
+    const ad2DumpMatch = trimmed.match(/Tìm thấy nút Ad 2 qua UI Dump tại \((\d+),\s*(\d+)\)/i);
+    if (ad2DumpMatch) {
+      return t('adsFarmFoundAd2Dump').replace('{x}', ad2DumpMatch[1]).replace('{y}', ad2DumpMatch[2]);
+    }
+
+    const ad1FallbackMatch = trimmed.match(/Không tìm thấy nút Ad 1 qua UI Dump.*?(\d+),\s*(\d+)/i);
+    if (ad1FallbackMatch) {
+      return t('adsFarmFallbackAd1').replace('{x}', ad1FallbackMatch[1]).replace('{y}', ad1FallbackMatch[2]);
+    }
+
+    const ad2FallbackMatch = trimmed.match(/Không tìm thấy nút Ad 2 qua UI Dump.*?(\d+),\s*(\d+)/i);
+    if (ad2FallbackMatch) {
+      return t('adsFarmFallbackAd2').replace('{x}', ad2FallbackMatch[1]).replace('{y}', ad2FallbackMatch[2]);
+    }
+
+    if (trimmed.includes('Đang chờ xem hết quảng cáo 1 trong 1 phút...')) {
+      return t('adsFarmWaitingAd1');
+    }
+
+    if (trimmed.includes('Đang chờ xem hết quảng cáo 2 trong 1 phút...')) {
+      return t('adsFarmWaitingAd2');
+    }
+
+    if (trimmed.includes('Hết thời gian quảng cáo 1 -> Diệt toàn bộ app Bugs, Play Store và Trình duyệt để dọn sạch màn hình...')) {
+      return t('adsFarmAd1Timeout');
+    }
+
+    if (trimmed.includes('Hết thời gian quảng cáo 2 -> Diệt toàn bộ app Bugs, Play Store và Trình duyệt để chuẩn bị chu kỳ mới...')) {
+      return t('adsFarmAd2Timeout');
+    }
+
+    const watchSuccessMatch = trimmed.match(/Tài khoản\s*\[(.+)\]\s*đã xem xong 2 Ads/i);
+    if (watchSuccessMatch) {
+      return t('adsFarmSuccess').replace('{email}', watchSuccessMatch[1]);
+    }
+
+    if (trimmed.includes('Đã lưu lịch sử Farm Ads của tài khoản vào database hệ thống.')) {
+      return t('adsFarmSavedToDatabase');
+    }
+
+    if (trimmed.includes('Đang quét tìm popup quảng cáo trang chủ...')) {
+      return t('adsFarmPopupScanning');
+    }
+
+    const scanAttemptMatch = trimmed.match(/Lần quét thứ\s*(\d+)\/6/i);
+    if (scanAttemptMatch) {
+      return t('adsFarmPopupScanAttempt').replace('{attempt}', scanAttemptMatch[1]);
+    }
+
+    const popupMatch = trimmed.match(/Phát hiện popup trang chủ Bugs.*?\((\d+),\s*(\d+)\)/i);
+    if (popupMatch) {
+      return t('adsFarmPopupDetected').replace('{x}', popupMatch[1]).replace('{y}', popupMatch[2]);
+    }
+
+    const closeBtnMatch = trimmed.match(/Bấm tiếp nút "닫기" tại \((\d+),\s*(\d+)\)/i);
+    if (closeBtnMatch) {
+      return t('adsFarmPopupClickClose').replace('{x}', closeBtnMatch[1]).replace('{y}', closeBtnMatch[2]);
+    }
+
+    if (trimmed.includes('Không phát hiện popup trang chủ Bugs sau 6 lần quét.')) {
+      return t('adsFarmPopupNotDetected');
+    }
+
+    if (trimmed.includes('Không tìm thấy tài khoản nào trong dữ liệu. Chờ 1 phút rồi kiểm tra lại...')) {
+      return t('adsFarmNoAccounts');
+    }
+
+    const cooldownMatch = trimmed.match(/Nghỉ ngơi tạm dừng\s*(\d+)\s*phút/i);
+    if (cooldownMatch) {
+      return t('adsFarmCooldown').replace('{minutes}', cooldownMatch[1]);
+    }
+
+    const newCycleMatch = trimmed.match(/BẮT ĐẦU CHU KỲ MỚI CHO:\s*\[(.+)\]/i);
+    if (newCycleMatch) {
+      return t('adsFarmNewCycle').replace('{email}', newCycleMatch[1]);
+    }
 
     if (trimmed === 'Trình duyệt đã sẵn sàng.' || trimmed.includes('Tr矛nh duy')) {
       return t('browserReady');
