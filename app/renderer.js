@@ -1213,7 +1213,15 @@ function translateWorkerLog(text) {
 // --- IPC IPC EVENTS ---
 
 window.txw.onSetupStatus((value) => {
-  setupStatus.textContent = t(value);
+  if (value.startsWith('progress:')) {
+    const percent = value.substring('progress:'.length);
+    setupStatus.textContent = `${t('browserDownloading')} ${percent}`;
+  } else if (value.startsWith('mirror:')) {
+    const mirror = value.substring('mirror:'.length);
+    setupStatus.textContent = `${t('setupRetryingWithMirror')} (${mirror})`;
+  } else {
+    setupStatus.textContent = t(value);
+  }
 });
 
 // Logs listener from worker process

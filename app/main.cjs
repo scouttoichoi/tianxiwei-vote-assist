@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeImage, Notification, utilityProcess, dialog, screen } = require('electron'); const path = require('node:path');
+const { app, BrowserWindow, ipcMain, nativeImage, Notification, utilityProcess, dialog, screen, session } = require('electron'); const path = require('node:path');
 const { fork } = require('node:child_process');
 const fs = require('node:fs/promises');
 const XLSX = require('xlsx');
@@ -13,6 +13,37 @@ let setupPromise = null;
 const rootDir = app.getAppPath();
 const runtimeDir = app.getPath('userData');
 const globalSettingsPath = path.join(runtimeDir, 'global-settings.json');
+const fsSync = require('node:fs');
+
+// Tự động phát hiện và cấu hình đường dẫn Chromium cục bộ (nếu có)
+function detectLocalBinary() {
+  const binaryNames = {
+    win32: 'chrome.exe',
+    darwin: 'Chromium.app/Contents/MacOS/Chromium',
+    linux: 'chrome'
+  };
+  const binName = binaryNames[process.platform] || 'chrome';
+
+  // 1. Kiểm tra thư mục bin/ bên cạnh thư mục cài đặt ứng dụng (rootDir)
+  const path1 = path.join(rootDir, 'bin', binName);
+  if (fsSync.existsSync(path1)) return path1;
+
+  // 2. Kiểm tra thư mục bin/ trong thư mục dữ liệu ứng dụng (runtimeDir)
+  const path2 = path.join(runtimeDir, 'bin', binName);
+  if (fsSync.existsSync(path2)) return path2;
+
+  // 3. Kiểm tra trong thư mục tài nguyên gốc nếu đang chạy chế độ dev
+  const path3 = path.join(rootDir, 'app', 'assets', 'bin', binName);
+  if (fsSync.existsSync(path3)) return path3;
+
+  return null;
+}
+
+const localBinaryPath = detectLocalBinary();
+if (localBinaryPath) {
+  process.env.CLOAKBROWSER_BINARY_PATH = localBinaryPath;
+  console.log(`[TianXiweiApp] Tự động phát hiện Chromium cục bộ tại: ${localBinaryPath}`);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -225,19 +256,99 @@ async function ensureInstanceConfig(instanceId, settings) {
 }
 //
 
+function runSetupWorker(extraEnv = {}) {
+  return new Promise((resolve, reject) => {
+    const child = fork(path.join(__dirname, 'setup-worker.cjs'), [], {
+      cwd: runtimeDir,
+      stdio: 'pipe',
+      env: {
+        ...process.env,
+        ...extraEnv
+      }
+    });
+
+    child.stdout?.on('data', (data) => {
+      const text = data.toString();
+      console.log(`[Setup-Worker] ${text.trim()}`);
+      
+      const progressMatch = text.match(/Download progress:\s*(\d+%\s*\([^)]+\))/i);
+      const mirrorMatch = text.match(/Tải qua mirror:\s*(.+)/i);
+      
+      if (progressMatch) {
+        send('setup-status', `progress:${progressMatch[1]}`);
+      } else if (mirrorMatch) {
+        const urlStr = mirrorMatch[1];
+        let cleanUrl = urlStr;
+        try {
+          const urlObj = new URL(urlStr);
+          cleanUrl = urlObj.hostname;
+        } catch {}
+        send('setup-status', `mirror:${cleanUrl}`);
+      } else {
+        send('setup-status', 'browserDownloading');
+      }
+      
+      send('worker-log', { instanceId: 'setup', text });
+    });
+
+    child.stderr?.on('data', (data) => {
+      const text = data.toString();
+      console.error(`[Setup-Worker-Error] ${text.trim()}`);
+      send('worker-log', { instanceId: 'setup', text });
+    });
+
+    child.on('exit', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Setup worker failed with code ${code}`));
+    });
+  });
+}
+
 function ensureSetupWorkerReady() {
   if (!setupPromise) {
     setupPromise = (async () => {
       send('setup-status', 'setupCheckingBrowser');
-      // Chạy setup worker ở thư mục chính của app
-      const child = fork(path.join(__dirname, 'setup-worker.cjs'), [], {
-        cwd: runtimeDir,
-        stdio: 'pipe'
-      });
-      child.stdout?.on('data', (data) => send('setup-status', 'browserDownloading'));
-      await new Promise((resolve, reject) => {
-        child.on('exit', (code) => code === 0 ? resolve() : reject(new Error('Setup failed')));
-      });
+      
+      let systemProxy = null;
+      try {
+        if (session && session.defaultSession) {
+          const resolved = await session.defaultSession.resolveProxy('https://github.com');
+          if (resolved && resolved.trim() !== '' && !resolved.toUpperCase().includes('DIRECT')) {
+            const parts = resolved.split(';');
+            for (const part of parts) {
+              const trimmed = part.trim();
+              const match = trimmed.match(/^(PROXY|SOCKS|SOCKS5)\s+(.+)$/i);
+              if (match) {
+                const type = match[1].toLowerCase();
+                const addr = match[2];
+                if (type === 'proxy') {
+                  systemProxy = `http://${addr}`;
+                  break;
+                } else if (type === 'socks5' || type === 'socks') {
+                  systemProxy = `socks5://${addr}`;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[TianXiweiApp] Lỗi khi nhận diện proxy hệ thống:', err);
+      }
+
+      if (systemProxy) {
+        console.log(`[TianXiweiApp] Nhận diện proxy hệ thống từ Electron: ${systemProxy}`);
+      }
+
+      try {
+        // setup-worker handles all mirrors internally and automatically
+        await runSetupWorker({
+          DETECTED_SYSTEM_PROXY: systemProxy || ''
+        });
+      } catch (error) {
+        console.error('[TianXiweiApp] Thiết lập trình duyệt thất bại hoàn toàn:', error);
+        throw error;
+      }
       send('setup-status', 'browserReady');
     })().finally(() => {
       setupPromise = null;

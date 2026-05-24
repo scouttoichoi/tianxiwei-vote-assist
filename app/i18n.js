@@ -45,6 +45,7 @@ window.I18N = {
     setupPreparing: 'Đang chuẩn bị công cụ...',
     setupHint: 'Lần đầu có thể mất vài phút',
     setupFailed: 'Không thể chuẩn bị dữ liệu nền.',
+    setupRetryingWithMirror: 'Không thể kết nối máy chủ chính. Đang thử tải qua máy chủ dự phòng...',
     emptyScoreHint: 'Chạy tool lần đầu để cập nhật chỉ số vote.',
 
     helpTitle: 'Hướng dẫn sử dụng',
@@ -285,6 +286,7 @@ window.I18N = {
     setupPreparing: '正在准备工具...',
     setupHint: '首次启动可能需要几分钟',
     setupFailed: '无法准备后台数据。',
+    setupRetryingWithMirror: '无法连接主服务器。正在尝试通过备份镜像服务器下载...',
     emptyScoreHint: '首次运行工具后会更新投票数据。',
 
     helpTitle: '使用说明',
@@ -525,6 +527,7 @@ window.I18N = {
     setupPreparing: '도구를 준비하는 중...',
     setupHint: '처음 실행할 때는 몇 분 정도 걸릴 수 있습니다',
     setupFailed: '백그라운드 데이터를 준비할 수 없습니다.',
+    setupRetryingWithMirror: '메인 서버에 연결할 수 없습니다. 백업 미러 서버를 통해 다운로드를 시도하는 중...',
     emptyScoreHint: '도구를 처음 실행하면 투표 수치가 업데이트됩니다.',
 
     helpTitle: '사용 안내',
@@ -765,6 +768,7 @@ window.I18N = {
     setupPreparing: 'Preparing the tool...',
     setupHint: 'First launch may take a few minutes',
     setupFailed: 'Unable to prepare background data.',
+    setupRetryingWithMirror: 'Unable to connect to primary server. Retrying download via backup mirror server...',
     emptyScoreHint: 'Run the tool once to update vote scores.',
 
     helpTitle: 'Help',
