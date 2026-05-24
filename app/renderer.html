@@ -129,6 +129,10 @@
                 <span data-i18n="loginVote">Vote bằng tài khoản cũ</span>
                 <small data-i18n="loginVoteHint">Chỉ chạy account chưa vote hôm nay</small>
               </button>
+              <button class="primaryAction tertiary" id="adsButton">
+                <span data-i18n="farmAds">Xem quảng cáo kiếm tim</span>
+                <small data-i18n="farmAdsHint">Tự động chạy máy ảo xem ads 24/7</small>
+              </button>
             </div>
             <div class="dataGroup">
               <button class="miniButton" id="accountsButton" data-i18n="accounts">Danh sách tài khoản</button>
@@ -195,6 +199,40 @@
       </div>
       <div class="countDialogActions">
         <button id="confirmInstanceFormDialog" data-i18n="save">Lưu</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Emulator Selection Dialog -->
+  <dialog id="emulatorDialog">
+    <div class="modalHeader">
+      <strong data-i18n="selectEmulator">Chọn loại giả lập đang dùng</strong>
+      <button id="closeEmulatorDialog" data-i18n="close">Đóng</button>
+    </div>
+    <div class="countDialogBody">
+      <p style="margin: 0 0 16px; font-size: 13px; color: rgba(255, 255, 255, 0.7);">
+        Vui lòng chọn trình giả lập Android bạn đang chạy để tool kết nối ADB chính xác:
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="radio" name="emulatorType" value="ldplayer" checked style="width: auto; height: auto;">
+          <span data-i18n="ldplayer">LDPlayer (Cổng 5555)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="radio" name="emulatorType" value="nox" style="width: auto; height: auto;">
+          <span data-i18n="nox">NoxPlayer (Cổng 62001)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="radio" name="emulatorType" value="bluestacks" style="width: auto; height: auto;">
+          <span data-i18n="bluestacks">BlueStacks 5 (Cổng 5555)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="radio" name="emulatorType" value="avd_genymotion" style="width: auto; height: auto;">
+          <span data-i18n="avdGenymotion">Android Studio / Genymotion</span>
+        </label>
+      </div>
+      <div class="countDialogActions">
+        <button id="confirmEmulatorDialog" data-i18n="start">Bắt đầu</button>
       </div>
     </div>
   </dialog>

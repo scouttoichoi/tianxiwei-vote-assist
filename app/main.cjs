@@ -1,11 +1,12 @@
 const { app, BrowserWindow, ipcMain, nativeImage, Notification, utilityProcess, dialog, screen } = require('electron'); const path = require('node:path');
+const { fork } = require('node:child_process');
 const fs = require('node:fs/promises');
 const XLSX = require('xlsx');
 
 app.setPath('userData', path.join(app.getPath('appData'), 'TianXiweiVoteAssistApp'));
 
 let mainWindow;
-const activeWorkers = new Map(); // key: instanceId, value: utilityProcess
+const activeWorkers = new Map(); // key: instanceId, value: childProcess
 let lastNotificationKey = '';
 let setupPromise = null;
 
@@ -64,12 +65,15 @@ function notifyIfNeeded(text, instanceName = '') {
   }
 }
 
-function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '') {
+function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '', onStart = null) {
   return new Promise((resolve, reject) => {
-    const child = utilityProcess.fork(modulePath, args, {
+    const child = fork(modulePath, args, {
       cwd: cwd,
       stdio: 'pipe'
     });
+
+    if (onStart) onStart(child);
+    activeWorkers.set(instanceId, child);
 
     child.stdout?.on('data', (data) => {
       const text = data.toString();
@@ -87,8 +91,6 @@ function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '') {
       send('data-updated', { instanceId });
       code === 0 ? resolve() : reject(new Error(`Worker exited with code ${code}`));
     });
-
-    activeWorkers.set(instanceId, child);
   });
 }
 
@@ -228,7 +230,7 @@ function ensureSetupWorkerReady() {
     setupPromise = (async () => {
       send('setup-status', 'setupCheckingBrowser');
       // Chạy setup worker ở thư mục chính của app
-      const child = utilityProcess.fork(path.join(__dirname, 'setup-worker.cjs'), [], {
+      const child = fork(path.join(__dirname, 'setup-worker.cjs'), [], {
         cwd: runtimeDir,
         stdio: 'pipe'
       });
@@ -591,15 +593,28 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
   const inst = settings.instances.find(i => i.id === instanceId);
   const instanceName = inst ? inst.name : '';
 
-  const command = mode === 'login' ? 'login' : 'signup';
+  let command = 'signup';
+  if (mode === 'login') command = 'login';
+  else if (mode === 'ads') command = 'ads';
+
   const runnerArgs = [command];
   if (command === 'signup' && options.count) {
     runnerArgs.push(String(options.count));
+  } else if (command === 'ads' && options.emulatorType) {
+    runnerArgs.push(options.emulatorType);
   }
 
   const instanceDir = getInstanceDir(instanceId);
   await fs.mkdir(path.join(instanceDir, 'data'), { recursive: true });
   await fs.mkdir(path.join(instanceDir, 'logs'), { recursive: true });
+
+  // Thiết lập placeholder trong activeWorkers ngay lập tức
+  let startingChild = null;
+  activeWorkers.set(instanceId, {
+    kill: () => {
+      if (startingChild) startingChild.kill();
+    }
+  });
 
   send('run-state', { instanceId, running: true, mode: command });
 
@@ -611,9 +626,13 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
       runnerArgs,
       instanceDir,
       instanceId,
-      instanceName
+      instanceName,
+      (child) => {
+        startingChild = child;
+      }
     );
   } finally {
+    activeWorkers.delete(instanceId);
     send('data-updated', { instanceId });
     send('run-state', { instanceId, running: false, mode: command });
   }
@@ -713,6 +732,34 @@ ipcMain.handle('instances:mark-voted', async (_event, instanceId, email) => {
   account.lastVotedAt = new Date().toISOString();
   account.status = account.status || 'active';
   account.lastError = '';
+
+  await saveAccounts(instanceId, accounts);
+  send('data-updated', { instanceId });
+
+  return {
+    ok: true,
+    account
+  };
+});
+
+ipcMain.handle('instances:toggle-account-status', async (_event, instanceId, email, newStatus) => {
+  const targetEmail = String(email || '').trim().toLowerCase();
+  if (!targetEmail) {
+    throw new Error('Missing account email');
+  }
+
+  const accounts = await readAccounts(instanceId);
+  const account = accounts.find((entry) => String(entry.email || '').trim().toLowerCase() === targetEmail);
+
+  if (!account) {
+    throw new Error('Account not found');
+  }
+
+  account.status = newStatus;
+  if (newStatus === 'active') {
+    account.lastError = ''; // Clear error on activation
+    delete account.lastAdWatchAt; // Xóa mốc xem ad để reset cooldown lập tức
+  }
 
   await saveAccounts(instanceId, accounts);
   send('data-updated', { instanceId });

@@ -115,6 +115,8 @@ window.I18N = {
     importAccountsHint: 'Import tài khoản Bugs từ file Excel có cột user, pass, voted_today.',
 
     markVotedToday: 'Đánh dấu đã vote hôm nay',
+    activateAccount: 'Kích hoạt tài khoản',
+    deactivateAccount: 'Hủy kích hoạt (Khóa)',
     markVotedDoneTitle: 'Đã cập nhật tài khoản',
     markVotedDoneMessage: 'Tài khoản {email} đã được đánh dấu là đã vote hôm nay.',
     markVotedConfirm: 'Đánh dấu tài khoản {email} là đã vote hôm nay?',
@@ -153,7 +155,15 @@ window.I18N = {
     noInstances: 'Chưa có phiên bản nào. Hãy bấm "Thêm phiên bản" để bắt đầu.',
     runAllSignup: 'Chạy Đăng ký mới tất cả',
     runAllLogin: 'Chạy Tài khoản cũ tất cả',
-    stopAll: 'Dừng tất cả'
+    stopAll: 'Dừng tất cả',
+    farmAds: 'Xem quảng cáo kiếm tim',
+    farmAdsHint: 'Tự động chạy máy ảo xem ads 24/7',
+    runningAds: 'Đang chạy xem quảng cáo...',
+    selectEmulator: 'Chọn loại giả lập đang dùng',
+    avdGenymotion: 'Android Studio / Genymotion',
+    ldplayer: 'LDPlayer (Cổng 5555)',
+    nox: 'NoxPlayer (Cổng 62001)',
+    bluestacks: 'BlueStacks 5 (Cổng 5555)'
   },
 
   zh: {
@@ -272,6 +282,8 @@ window.I18N = {
     importAccountsHint: '从包含 user、pass、voted_today 的 Excel 文件导入 Bugs 账号。',
 
     markVotedToday: '标记为今天已投票',
+    activateAccount: '激活账号',
+    deactivateAccount: '停用账号',
     markVotedDoneTitle: '账号已更新',
     markVotedDoneMessage: '账号 {email} 已标记为今天已投票。',
     markVotedConfirm: '将账号 {email} 标记为今天已投票？',
@@ -310,7 +322,15 @@ window.I18N = {
     noInstances: '暂无版本，点击“添加版本”开始。',
     runAllSignup: '全部运行注册',
     runAllLogin: '全部运行登录',
-    stopAll: '全部停止'
+    stopAll: '全部停止',
+    farmAds: '看广告赚心',
+    farmAdsHint: '自动运行模拟器看广告24/7',
+    runningAds: '正在看广告赚心...',
+    selectEmulator: '选择正在使用的模拟器',
+    avdGenymotion: 'Android Studio / Genymotion',
+    ldplayer: 'LDPlayer (端口 5555)',
+    nox: 'NoxPlayer (端口 62001)',
+    bluestacks: 'BlueStacks 5 (端口 5555)'
   },
 
   ko: {
@@ -429,6 +449,8 @@ window.I18N = {
     importAccountsHint: 'user, pass, voted_today 열이 있는 Excel 파일에서 Bugs 계정을 가져옵니다.',
 
     markVotedToday: '오늘 투표 완료로 표시',
+    activateAccount: '계정 활성화',
+    deactivateAccount: '계정 비활성화',
     markVotedDoneTitle: '계정 업데이트 완료',
     markVotedDoneMessage: '{email} 계정을 오늘 투표 완료로 표시했습니다.',
     markVotedConfirm: '{email} 계정을 오늘 투표 완료로 표시할까요?',
@@ -467,7 +489,15 @@ window.I18N = {
     noInstances: '인스턴스가 없습니다. "인스턴스 추가"를 눌러 시작하세요.',
     runAllSignup: '전체 신규가입 시작',
     runAllLogin: '전체 기존계정 시작',
-    stopAll: '전체 중지'
+    stopAll: '전체 중지',
+    farmAds: '광고 보고 하트 모으기',
+    farmAdsHint: '에뮬레이터로 24/7 자동 광고 시청',
+    runningAds: '광고 시청 실행 중...',
+    selectEmulator: '사용 중인 에뮬레이터 선택',
+    avdGenymotion: 'Android Studio / Genymotion',
+    ldplayer: 'LDPlayer (포트 5555)',
+    nox: 'NoxPlayer (포트 62001)',
+    bluestacks: 'BlueStacks 5 (포트 5555)'
   },
 
   en: {
@@ -586,6 +616,8 @@ window.I18N = {
     importAccountsHint: 'Import Bugs accounts from an Excel file with user, pass, voted_today.',
 
     markVotedToday: 'Mark voted today',
+    activateAccount: 'Activate Account',
+    deactivateAccount: 'Deactivate Account',
     markVotedDoneTitle: 'Account Updated',
     markVotedDoneMessage: 'Account {email} has been marked as voted today.',
     markVotedConfirm: 'Mark account {email} as voted today?',
@@ -624,6 +656,14 @@ window.I18N = {
     noInstances: 'No instances yet. Click "Add Instance" to start.',
     runAllSignup: 'Run All Signup',
     runAllLogin: 'Run All Login',
-    stopAll: 'Stop All'
+    stopAll: 'Stop All',
+    farmAds: 'Watch Ads for Hearts',
+    farmAdsHint: 'Auto watch ads 24/7 via emulator',
+    runningAds: 'Farming ads...',
+    selectEmulator: 'Select Your Emulator',
+    avdGenymotion: 'Android Studio / Genymotion',
+    ldplayer: 'LDPlayer (Port 5555)',
+    nox: 'NoxPlayer (Port 62001)',
+    bluestacks: 'BlueStacks 5 (Port 5555)'
   }
 };

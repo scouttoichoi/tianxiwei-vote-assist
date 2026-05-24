@@ -33,12 +33,18 @@ const closeInstanceFormDialog = document.getElementById('closeInstanceFormDialog
 // Action Buttons
 const signupButton = document.getElementById('signupButton');
 const loginButton = document.getElementById('loginButton');
+const adsButton = document.getElementById('adsButton');
 const accountsButton = document.getElementById('accountsButton');
 const importAccountsButton = document.getElementById('importAccountsButton');
 const downloadTemplateButton = document.getElementById('downloadTemplateButton');
 const historyButton = document.getElementById('historyButton');
 const helpButtonMain = document.getElementById('helpButtonMain');
 const helpButton = document.getElementById('helpButton');
+
+// Emulator Choice DOMs
+const emulatorDialog = document.getElementById('emulatorDialog');
+const closeEmulatorDialog = document.getElementById('closeEmulatorDialog');
+const confirmEmulatorDialog = document.getElementById('confirmEmulatorDialog');
 
 // Global controls
 const addInstanceButton = document.getElementById('addInstanceButton');
@@ -179,7 +185,10 @@ function renderInstancesList() {
     if (inst.running) {
       statusClass = 'running';
       statusText = t('running');
-      if (/Vui lòng nhập captcha/i.test(log) || /captcha/i.test(log)) {
+      if (inst.runningMode === 'ads' || /quảng cáo|ad/i.test(log)) {
+        statusClass = 'runningAds';
+        statusText = t('runningAds');
+      } else if (/Vui lòng nhập captcha/i.test(log) || /captcha/i.test(log)) {
         statusClass = 'waitingCaptcha';
         statusText = t('waitingCaptcha');
       }
@@ -278,6 +287,38 @@ async function updateSelectedInstanceDashboard(inst) {
   const log = instanceLogs.get(inst.id) || '';
   logOutput.textContent = log || t('idleLog');
   logOutput.scrollTop = logOutput.scrollHeight;
+
+  // Cập nhật trạng thái các nút bấm trong dashboard dựa trên trạng thái chạy
+  if (inst.running) {
+    // Vô hiệu hóa các nút khác, chuyển nút đang chạy thành nút Dừng
+    signupButton.disabled = inst.runningMode !== 'signup';
+    loginButton.disabled = inst.runningMode !== 'login';
+    adsButton.disabled = inst.runningMode !== 'ads';
+
+    if (inst.runningMode === 'signup') {
+      signupButton.innerHTML = `<span>⏹ DỪNG ĐĂNG KÝ VÀ VOTE</span><small>Bấm để dừng tiến trình ngay lập tức</small>`;
+      signupButton.classList.add('btnDashboardStop');
+    } else if (inst.runningMode === 'login') {
+      loginButton.innerHTML = `<span>⏹ DỪNG VOTE TÀI KHOẢN CŨ</span><small>Bấm để dừng tiến trình ngay lập tức</small>`;
+      loginButton.classList.add('btnDashboardStop');
+    } else if (inst.runningMode === 'ads') {
+      adsButton.innerHTML = `<span>⏹ DỪNG FARM ADS MÁY ẢO</span><small>Bấm để tắt và giải phóng máy ảo</small>`;
+      adsButton.classList.add('btnDashboardStop');
+    }
+  } else {
+    // Trở lại trạng thái bình thường
+    signupButton.disabled = false;
+    loginButton.disabled = false;
+    adsButton.disabled = false;
+
+    signupButton.classList.remove('btnDashboardStop');
+    loginButton.classList.remove('btnDashboardStop');
+    adsButton.classList.remove('btnDashboardStop');
+
+    signupButton.innerHTML = `<span>${t('signup')}</span><small>${t('signupHint')}</small>`;
+    loginButton.innerHTML = `<span>${t('loginVote')}</span><small>${t('loginVoteHint')}</small>`;
+    adsButton.innerHTML = `<span>${t('farmAds')}</span><small>${t('farmAdsHint')}</small>`;
+  }
 }
 
 // Handle instance table action button clicks
@@ -351,7 +392,69 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
     logOutput.textContent = '';
   }
 
-  appendInstanceLog(instanceId, `${mode === 'login' ? t('runningLogin') : t('runningSignup')}\n`);
+  let startLogText = '';
+  if (mode === 'login') {
+    startLogText = t('runningLogin');
+  } else if (mode === 'ads') {
+    startLogText = t('runningAds');
+  } else {
+    startLogText = t('runningSignup');
+  }
+  appendInstanceLog(instanceId, `${startLogText}\n`);
+  appendInstanceLog(instanceId, `[DEBUG UI] startInstanceProcess: instanceId = ${instanceId}, selected = ${selectedInstanceId}\n`);
+
+  // Optimistic UI Update
+  const inst = instances.find((i) => i.id === instanceId);
+  appendInstanceLog(instanceId, `[DEBUG UI] inst object found: ${!!inst}\n`);
+  if (inst) {
+    inst.running = true;
+    inst.runningMode = mode;
+  }
+
+  // --- TRỰC TIẾP CẬP NHẬT DOM ĐỒNG BỘ (Instant Visual Feedback) ---
+  // 1. Cập nhật dòng trong bảng danh sách
+  const row = document.querySelector(`#instancesTableBody tr[data-id="${instanceId}"]`);
+  appendInstanceLog(instanceId, `[DEBUG UI] Row found: ${!!row}, instances size: ${instances.length}\n`);
+  if (row) {
+    row.classList.add('is-running');
+    const badge = row.querySelector('.badgeStatus');
+    if (badge) {
+      badge.className = 'badgeStatus runningAds';
+      badge.textContent = mode === 'ads' ? 'Đang farm ads...' : 'Đang chạy...';
+    }
+    const rowActions = row.querySelector('.rowActions');
+    if (rowActions && !rowActions.querySelector('.btnRowStop')) {
+      const stopBtn = document.createElement('button');
+      stopBtn.className = 'btnRowStop';
+      stopBtn.dataset.action = 'stop';
+      stopBtn.title = t('stop') || 'Dừng';
+      stopBtn.textContent = '⏹';
+      stopBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.txw.stopInstance(instanceId);
+      });
+      rowActions.insertBefore(stopBtn, rowActions.firstChild);
+    }
+  }
+
+  // 2. Cập nhật trực tiếp các nút trên Dashboard bên phải
+  appendInstanceLog(instanceId, `[DEBUG UI] selectedInstanceId === instanceId is ${selectedInstanceId === instanceId}\n`);
+  if (selectedInstanceId === instanceId) {
+    signupButton.disabled = mode !== 'signup';
+    loginButton.disabled = mode !== 'login';
+    adsButton.disabled = mode !== 'ads';
+
+    if (mode === 'signup') {
+      signupButton.innerHTML = `<span>⏹ DỪNG ĐĂNG KÝ VÀ VOTE</span><small>Bấm để dừng tiến trình ngay lập tức</small>`;
+      signupButton.classList.add('btnDashboardStop');
+    } else if (mode === 'login') {
+      loginButton.innerHTML = `<span>⏹ DỪNG VOTE TÀI KHOẢN CŨ</span><small>Bấm để dừng tiến trình ngay lập tức</small>`;
+      loginButton.classList.add('btnDashboardStop');
+    } else if (mode === 'ads') {
+      adsButton.innerHTML = `<span>⏹ DỪNG FARM ADS MÁY ẢO</span><small>Bấm để tắt và giải phóng máy ảo</small>`;
+      adsButton.classList.add('btnDashboardStop');
+    }
+  }
 
   try {
     // Select this instance so the user can watch the logs
@@ -429,7 +532,7 @@ async function showAccounts() {
   const deactiveAccounts = accounts.filter((account) => (account.status || '').toLowerCase() === 'deactive');
   const totalVotes = accounts.reduce((sum, account) => sum + normalizeVoteCount(account.lastVoteCount), 0);
 
-  const renderRows = (items) => items.map((account) => `
+  const renderRows = (items, isActiveTab) => items.map((account) => `
     <tr>
       <td>${account.email || '-'}</td>
       <td>${account.password || '-'}</td>
@@ -437,13 +540,36 @@ async function showAccounts() {
       <td>${numberFormat.format(normalizeVoteCount(account.lastVoteCount))}</td>
       <td>${account.lastError || ''}</td>
       <td>
-        <button
-          type="button"
-          class="miniButton"
-          data-mark-voted-email="${account.email || ''}"
-        >
-          ${t('markVotedToday')}
-        </button>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          ${isActiveTab ? `
+            <button
+              type="button"
+              class="miniButton"
+              data-mark-voted-email="${account.email || ''}"
+            >
+              ${t('markVotedToday')}
+            </button>
+            <button
+              type="button"
+              class="miniButton"
+              style="background: linear-gradient(135deg, #d32f2f, #f44336); border: none;"
+              data-toggle-status-email="${account.email || ''}"
+              data-new-status="deactive"
+            >
+              ${t('deactivateAccount')}
+            </button>
+          ` : `
+            <button
+              type="button"
+              class="miniButton"
+              style="background: linear-gradient(135deg, #2e7d32, #4caf50); border: none;"
+              data-toggle-status-email="${account.email || ''}"
+              data-new-status="active"
+            >
+              ${t('activateAccount')}
+            </button>
+          `}
+        </div>
       </td>
     </tr>
   `).join('');
@@ -485,7 +611,7 @@ async function showAccounts() {
             <th>${t('actions')}</th>
           </tr>
         </thead>
-        <tbody>${renderRows(activeAccounts) || `<tr><td colspan="6">${t('noActiveAccounts')}</td></tr>`}</tbody>
+        <tbody>${renderRows(activeAccounts, true) || `<tr><td colspan="6">${t('noActiveAccounts')}</td></tr>`}</tbody>
       </table>
     </div>
 
@@ -501,7 +627,7 @@ async function showAccounts() {
             <th>${t('actions')}</th>
           </tr>
         </thead>
-        <tbody>${renderRows(deactiveAccounts) || `<tr><td colspan="6">${t('noDeactiveAccounts')}</td></tr>`}</tbody>
+        <tbody>${renderRows(deactiveAccounts, false) || `<tr><td colspan="6">${t('noDeactiveAccounts')}</td></tr>`}</tbody>
       </table>
     </div>
   `);
@@ -509,6 +635,7 @@ async function showAccounts() {
   const triggers = [...modalBody.querySelectorAll('[data-tab-trigger]')];
   const panels = [...modalBody.querySelectorAll('[data-tab-panel]')];
   const markButtons = [...modalBody.querySelectorAll('[data-mark-voted-email]')];
+  const toggleButtons = [...modalBody.querySelectorAll('[data-toggle-status-email]')];
 
   const activateTab = (tabName) => {
     for (const trigger of triggers) {
@@ -547,6 +674,32 @@ async function showAccounts() {
       } catch (error) {
         button.disabled = false;
         button.textContent = oldText;
+        window.alert(error.message || error);
+      }
+    });
+  }
+
+  for (const button of toggleButtons) {
+    button.addEventListener('click', async () => {
+      const email = button.dataset.toggleStatusEmail;
+      const newStatus = button.dataset.newStatus;
+      const confirmMsg = newStatus === 'active'
+        ? `Kích hoạt lại tài khoản ${email}?`
+        : `Hủy kích hoạt (Khóa) tài khoản ${email}?`;
+
+      const ok = window.confirm(confirmMsg);
+      if (!ok) return;
+
+      button.disabled = true;
+      button.textContent = '...';
+
+      try {
+        await window.txw.toggleInstanceAccountStatus(selectedInstanceId, email, newStatus);
+        await refreshInstances();
+        await showAccounts();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = newStatus === 'active' ? t('activateAccount') : t('deactivateAccount');
         window.alert(error.message || error);
       }
     });
@@ -773,10 +926,11 @@ window.txw.onLog(({ instanceId, text }) => {
 });
 
 // Run state listener (running: true/false)
-window.txw.onRunState(({ instanceId, running }) => {
+window.txw.onRunState(({ instanceId, running, mode }) => {
   const inst = instances.find((i) => i.id === instanceId);
   if (inst) {
     inst.running = running;
+    inst.runningMode = running ? mode : null;
     renderInstancesList();
     if (selectedInstanceId === instanceId) {
       updateSelectedInstanceDashboard(inst);
@@ -804,12 +958,41 @@ languageSelect?.addEventListener('change', (event) => {
 document.getElementById('closeModal').addEventListener('click', () => modal.close());
 
 // Selected Instance Action Events
-signupButton.addEventListener('click', () => startInstanceProcess(selectedInstanceId, 'signup'));
-loginButton.addEventListener('click', () => startInstanceProcess(selectedInstanceId, 'login'));
+signupButton.addEventListener('click', () => {
+  if (signupButton.classList.contains('btnDashboardStop')) {
+    window.txw.stopInstance(selectedInstanceId);
+  } else {
+    startInstanceProcess(selectedInstanceId, 'signup');
+  }
+});
+loginButton.addEventListener('click', () => {
+  if (loginButton.classList.contains('btnDashboardStop')) {
+    window.txw.stopInstance(selectedInstanceId);
+  } else {
+    startInstanceProcess(selectedInstanceId, 'login');
+  }
+});
+adsButton.addEventListener('click', () => {
+  if (adsButton.classList.contains('btnDashboardStop')) {
+    window.txw.stopInstance(selectedInstanceId);
+  } else {
+    if (!selectedInstanceId) return;
+    emulatorDialog.showModal();
+  }
+});
 accountsButton.addEventListener('click', showAccounts);
 historyButton.addEventListener('click', showHistory);
 helpButton.addEventListener('click', showHelp);
 helpButtonMain.addEventListener('click', showHelp);
+
+// Emulator Selection Dialog Events
+closeEmulatorDialog.addEventListener('click', () => emulatorDialog.close());
+confirmEmulatorDialog.addEventListener('click', () => {
+  const selectedRadio = emulatorDialog.querySelector('input[name="emulatorType"]:checked');
+  const emulatorType = selectedRadio ? selectedRadio.value : 'avd_genymotion';
+  emulatorDialog.close();
+  startInstanceProcess(selectedInstanceId, 'ads', { emulatorType });
+});
 
 // Download Excel Template
 downloadTemplateButton?.addEventListener('click', async () => {

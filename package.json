@@ -17,6 +17,9 @@
     "appId": "com.tianxiwei.voteassist",
     "productName": "Tian Xiwei Vote Assist",
     "asar": true,
+    "asarUnpack": [
+      "app/assets/bin/**/*"
+    ],
     "files": [
       "app/**/*",
       "scripts/**/*",
