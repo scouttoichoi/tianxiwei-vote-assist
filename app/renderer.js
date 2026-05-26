@@ -591,7 +591,7 @@ async function showAccounts() {
   if (!selectedInstanceId) return;
 
   const accounts = await window.txw.getInstanceAccounts(selectedInstanceId);
-  const activeAccounts = accounts.filter((account) => (account.status || '').toLowerCase() === 'active');
+  const activeAccounts = accounts.filter((account) => (account.status || 'active').toLowerCase() !== 'deactive');
   const deactiveAccounts = accounts.filter((account) => (account.status || '').toLowerCase() === 'deactive');
   const totalVotes = accounts.reduce((sum, account) => sum + normalizeVoteCount(account.lastVoteCount), 0);
 

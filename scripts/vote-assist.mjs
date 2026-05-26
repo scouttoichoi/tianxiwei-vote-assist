@@ -37,22 +37,6 @@ const TEMP_MAIL_PROVIDERS = [
     ]
   },
   {
-    id: 'tempmail-id-vn',
-    label: 'tempmail.id.vn',
-    url: 'https://tempmail.id.vn/inbox',
-    rotateSelectors: [
-      'button:has-text("Tạo mới")',
-      'button:has-text("Làm mới")',
-      'button:has-text("Xóa")',
-      'text=Tạo mới',
-      'text=Xóa'
-    ],
-    refreshSelectors: [
-      'button:has-text("Làm mới")',
-      'text=Làm mới'
-    ]
-  },
-  {
     id: 'mail-tm',
     label: 'mail.tm',
     url: 'https://mail.tm/en/',
@@ -66,6 +50,15 @@ const TEMP_MAIL_PROVIDERS = [
       'button:has-text("Refresh")',
       'a:has-text("Refresh")',
       'text=Refresh'
+    ],
+    emailSelectors: [
+      'input[type="email"][readonly]',
+      'input[readonly][value*="@"]',
+      '[data-grace-area-trigger] input[value*="@"]'
+    ],
+    inboxRowSelectors: [
+      'div.mt-6 ul > li > a[href*="/view/"]',
+      'div.mt-6 a[href*="/view/"]'
     ]
   }
 ];
@@ -81,6 +74,7 @@ const USER_DATA_DIR = path.resolve('.cloakbrowser-profile');
 const PROXY_STATE_PATH = path.resolve('data/proxy-rotation-state.json');
 const DEFAULT_VIEWPORT = { width: 1280, height: 820 };
 const EMAIL_VERIFY_TIMEOUT_MS = 30_000;
+const VOTE_RETRY_TIMEOUT_MS = 180_000;
 const INVALID_LOGIN_MESSAGE = '아이디 또는 비밀번호를 확인해 주세요.';
 const LOGIN_NOT_CONFIRMED_ERROR = 'login-not-confirmed';
 const BUGS_VOTE_TIMEZONE = 'Asia/Seoul';
@@ -104,6 +98,25 @@ process.on('SIGTERM', handleExit);
 process.on('SIGINT', handleExit);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Hàm xóa quảng cáo che khuất và phục hồi scroll
+async function removeAdOverlay(page) {
+  await page.evaluate(() => {
+    // Xóa hộp thoại Monetization Ads và Funding Choices cản trở nhấp chuột
+    const overlays = document.querySelectorAll('.fc-monetization-dialog-container, .fc-dialog-container, div[class*="monetization"]');
+    let removedCount = 0;
+    for (const el of overlays) {
+      el.remove();
+      removedCount++;
+    }
+    if (removedCount > 0) {
+      // Phục hồi lại khả năng cuộn trang của body/html nếu bị adblock khóa cuộn
+      document.body.style.overflow = 'auto';
+      document.documentElement.style.overflow = 'auto';
+      document.body.style.pointerEvents = 'auto';
+    }
+  }).catch(() => {});
+}
 
 async function cleanupCaptchaImages() {
   const logsDir = path.resolve('logs');
@@ -310,11 +323,12 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
     const voted = await voteFavorite(context, config);
     state.lastVotedAt = voted ? new Date().toISOString() : '';
     state.lastVoteCount = voted ? 5 : 0;
-    state.status = voted ? 'active' : 'needs-review';
+    state.status = 'active';
+    state.lastError = voted ? '' : 'vote-not-confirmed';
     await saveAccount(state);
     await appendLog({ ...state, completedAt: new Date().toISOString(), status: 'completed' });
     console.log(`Hoàn tất đăng ký + vote. Đã lưu account vào: ${ACCOUNTS_PATH}`);
-    return true;
+    return voted;
   } finally {
     if (activeBrowser) {
       await activeBrowser.close?.().catch(() => {});
@@ -368,6 +382,7 @@ async function runLoginCommand(config) {
       account.lastVotedAt = voted ? new Date().toISOString() : account.lastVotedAt;
       account.lastVoteCount = voted ? nextVoteCount(account.lastVoteCount, 5) : normalizeVoteCount(account.lastVoteCount);
       account.lastError = voted ? '' : 'vote-not-confirmed';
+      account.status = account.status || 'active';
       completed += voted ? 1 : 0;
       await saveAccounts(accounts);
       await appendLog({ email: account.email, completedAt: new Date().toISOString(), status: voted ? 'login-voted' : 'login-vote-failed' });
@@ -541,6 +556,7 @@ async function getTempMailAddress(page, provider = TEMP_MAIL_PROVIDERS[0]) {
 
   // Hỗ trợ sinh email tự động cho tempmail.id.vn trên một trình duyệt mới hoàn toàn
   if (provider.id === 'tempmail-id-vn') {
+    await removeAdOverlay(page);
     const randomBtn = page.locator('button:has-text("Tạo ngẫu nhiên")').first();
     if (await randomBtn.count().catch(() => 0)) {
       if (await randomBtn.isVisible().catch(() => false)) {
@@ -552,7 +568,8 @@ async function getTempMailAddress(page, provider = TEMP_MAIL_PROVIDERS[0]) {
   }
 
   for (let randomAttempt = 0; randomAttempt < 8; randomAttempt += 1) {
-    const email = await readTempMailAddress(page);
+    await removeAdOverlay(page);
+    const email = await readTempMailAddress(page, provider);
     if (!isBlockedTempMailDomain(email)) return email;
 
     console.warn(`Temp mail ${email} đang dùng domain lỗi trên ${provider.label}, thử đổi mail khác...`);
@@ -565,10 +582,11 @@ async function getTempMailAddress(page, provider = TEMP_MAIL_PROVIDERS[0]) {
   throw new Error('Đã random temp-mail nhiều lần nhưng vẫn gặp domain lỗi.');
 }
 
-async function readTempMailAddress(page) {
+async function readTempMailAddress(page, provider = TEMP_MAIL_PROVIDERS[0]) {
   await page.waitForLoadState('domcontentloaded');
 
   const selectors = [
+    ...(provider.emailSelectors ?? []),
     'input[value*="@"]',
     '[data-qa="current-email"]',
     '[data-testid="email"]',
@@ -577,6 +595,7 @@ async function readTempMailAddress(page) {
   ];
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
+    await removeAdOverlay(page);
     for (const selector of selectors) {
       const locator = page.locator(selector).first();
       if (await locator.count().catch(() => 0)) {
@@ -650,6 +669,7 @@ async function openBugsLoginForm(page) {
 async function randomizeTempMail(page, provider = TEMP_MAIL_PROVIDERS[0]) {
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(1_500);
+  await removeAdOverlay(page);
   const clicked = await clickFirstAvailable(page, provider.rotateSelectors).catch(() => { });
   await page.waitForTimeout(2_000);
   return Boolean(clicked);
@@ -1152,13 +1172,15 @@ async function verifyEmail(tempPage, provider = TEMP_MAIL_PROVIDERS[0], config =
 
   const deadline = Date.now() + EMAIL_VERIFY_TIMEOUT_MS;
   while (Date.now() < deadline) {
+    await removeAdOverlay(tempPage);
     await clickFirstAvailable(tempPage, provider.refreshSelectors).catch(() => { });
     await sleep(2_000);
 
-    const bugsMail = tempPage.locator('text=/\\[Bugs\\]|Please proceed|authentication/i').first();
-    if (await bugsMail.count().catch(() => 0)) {
-      await bugsMail.click().catch(() => { });
-      await tempPage.waitForTimeout(1_500);
+    const opened = provider.id === 'mail-tm'
+      ? await openMailTmVerificationEmail(tempPage, provider)
+      : await openGenericVerificationEmail(tempPage);
+
+    if (opened) {
       const authUrl = await findEmailAuthenticationUrl(tempPage);
       if (authUrl) {
         const authPage = await tempPage.context().newPage();
@@ -1176,6 +1198,64 @@ async function verifyEmail(tempPage, provider = TEMP_MAIL_PROVIDERS[0], config =
   }
 
   return false;
+}
+
+async function openGenericVerificationEmail(tempPage) {
+  const bugsMail = tempPage.locator('text=/\\[Bugs\\]|Please proceed|authentication/i').first();
+  if (!(await bugsMail.count().catch(() => 0))) {
+    return false;
+  }
+
+  await removeAdOverlay(tempPage);
+  await bugsMail.click({ force: true }).catch(() => { });
+  await tempPage.waitForTimeout(1_500);
+  return true;
+}
+
+async function openMailTmVerificationEmail(tempPage, provider) {
+  const row = await findInboxRowByText(tempPage, provider);
+  if (!row) {
+    return false;
+  }
+
+  await removeAdOverlay(tempPage);
+  await row.scrollIntoViewIfNeeded().catch(() => { });
+  await row.click({ force: true }).catch(async () => {
+    await row.evaluate((element) => element.click());
+  });
+  await tempPage.waitForTimeout(1_500);
+  return true;
+}
+
+async function openInboxRowVerificationEmail(tempPage, provider) {
+  const row = await findInboxRowByText(tempPage, provider);
+  if (!row) {
+    return false;
+  }
+
+  await removeAdOverlay(tempPage);
+  await row.scrollIntoViewIfNeeded().catch(() => { });
+  await row.click({ force: true }).catch(async () => {
+    await row.evaluate((element) => element.click());
+  });
+  await tempPage.waitForTimeout(1_500);
+  return true;
+}
+
+async function findInboxRowByText(page, provider) {
+  for (const selector of provider.inboxRowSelectors ?? []) {
+    const rows = page.locator(selector);
+    const count = await rows.count().catch(() => 0);
+    for (let i = 0; i < count; i += 1) {
+      const row = rows.nth(i);
+      const text = await row.innerText().catch(() => '');
+      if (/bugs|authentication|please proceed|verify|verification/i.test(text)) {
+        return row;
+      }
+    }
+  }
+
+  return null;
 }
 
 async function findEmailAuthenticationUrl(page) {
@@ -1241,50 +1321,74 @@ async function prepareFavoritePage(page) {
   }
 }
 
+async function isVoteLoginRequired(page) {
+  return await page
+    .locator('text=/requires login|A service that requires login|로그인/i')
+    .first()
+    .isVisible({ timeout: 3_000 })
+    .catch(() => false);
+}
+
+async function hasFavoriteCandidate(page) {
+  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote[data-candidate-id="11046"]').first();
+  if (await voteButton.count().catch(() => 0)) {
+    return true;
+  }
+
+  const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+  return await candidate.count().catch(() => 0);
+}
+
 async function voteFavorite(context, config = {}) {
   const votePage = await context.newPage();
   if (config.autoFocusBrowser !== false) {
     await votePage.bringToFront().catch(() => { });
   }
-  // await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-  await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'commit', timeout: 15_000 });
-  await votePage.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => { });
-  //
-  let loginRequired = await votePage
-    .locator('text=/requires login|A service that requires login|로그인/i')
-    .first()
-    .isVisible({ timeout: 3_000 })
-    .catch(() => false);
+  const deadline = Date.now() + (Number(config.voteRetryTimeoutMs) || VOTE_RETRY_TIMEOUT_MS);
+  let scoreRecorded = false;
 
-  if (loginRequired) {
-    console.warn('Trang vote chưa nhận session login. Đợi ngắn rồi thử lại...');
-    await sleep(1_500);
+  await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'commit', timeout: 20_000 }).catch(() => { });
+  await votePage.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => { });
+
+  for (let attempt = 1; Date.now() < deadline; attempt += 1) {
+    console.log(`\n[VOTE] Lần thử ${attempt}: kiểm tra trạng thái trang vote...`);
 
     await votePage.waitForLoadState('domcontentloaded', { timeout: 5_000 }).catch(() => { });
-    await votePage.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => { });
-    // await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await votePage.waitForTimeout(2_000);
 
-    loginRequired = await votePage
-      .locator('text=/requires login|A service that requires login|로그인/i')
-      .first()
-      .isVisible({ timeout: 3_000 })
-      .catch(() => false);
-
+    const loginRequired = await isVoteLoginRequired(votePage);
     if (loginRequired) {
-      console.warn('Trang vote vẫn báo chưa đăng nhập sau khi thử lại. Bỏ qua account này, giữ active để lần sau chạy lại.');
-      return false;
+      console.warn('[VOTE] Trang vote chưa nhận session login hoặc vẫn đang hiện thông báo login. Chờ thêm...');
+      await sleep(4_000);
+      continue;
     }
-  }
-  //
-  await prepareFavoritePage(votePage);
-  await recordVoteScores(votePage);
 
-  console.log('\nĐã mở trang vote và tìm nút Voting của TIAN Xiwei.');
-  const voted = await completeFavoriteVote(votePage);
-  if (!voted) {
-    console.warn('Chưa xác nhận được vote tự động. Bạn kiểm tra thủ công xong thì nhấn Enter để tiếp tục...');//await waitEnter
+    const candidateVisible = await hasFavoriteCandidate(votePage);
+    if (!candidateVisible) {
+      console.warn('[VOTE] Chưa thấy candidate TIAN Xiwei hoặc nút vote. Giữ nguyên trang và chờ load thêm...');
+      await sleep(4_000);
+      continue;
+    }
+
+    await prepareFavoritePage(votePage);
+
+    if (!scoreRecorded) {
+      await recordVoteScores(votePage).catch(() => { });
+      scoreRecorded = true;
+    }
+
+    console.log('[VOTE] Đã thấy candidate. Thử bấm vote...');
+    const voted = await completeFavoriteVote(votePage);
+    if (voted) {
+      return true;
+    }
+
+    console.warn('[VOTE] Chưa hoàn tất được vote ở lần thử này. Giữ nguyên trang và thử lại...');
+    await sleep(4_000);
   }
-  return voted;
+
+  console.warn('Hết thời gian retry vote mà vẫn chưa xác nhận được vote tự động.');
+  return false;
 }
 
 async function recordVoteScores(page) {
