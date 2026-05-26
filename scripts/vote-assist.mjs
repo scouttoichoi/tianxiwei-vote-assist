@@ -1343,6 +1343,13 @@ async function hasFavoriteCandidate(page) {
 
 async function voteFavorite(context, config = {}) {
   const votePage = await context.newPage();
+  
+  // Đăng ký bộ lắng nghe dialog trên trang vote để phát hiện thông báo lỗi (như hết tim, lỗi phiên...)
+  votePage.on('dialog', async (dialog) => {
+    console.log(`💬 [VOTE] Phát hiện thông báo từ trang web: [${dialog.message()}]`);
+    await dialog.dismiss().catch(() => {});
+  });
+
   if (config.autoFocusBrowser !== false) {
     await votePage.bringToFront().catch(() => { });
   }
@@ -1481,16 +1488,40 @@ async function completeFavoriteVote(page) {
     }
 
     const useAllButton = page
-      .locator('button[data-ga-params="Favorite_투표하기-모두사용"], button:has-text("Use All")')
+      .locator([
+        'button[data-ga-params="Favorite_투표하기-모du-사용"]',
+        'button[data-ga-params="Favorite_투표하기-모du-사용"]',
+        'button[data-ga-params="Favorite_투표하기-모두사용"]',
+        'button:has-text("Use All")',
+        'button:has-text("모두사용")',
+        'a:has-text("Use All")',
+        'a:has-text("모두사용")',
+        '[data-ga-params*="모두사용"]'
+      ].join(', '))
       .first();
     await useAllButton.waitFor({ state: 'visible', timeout: 10_000 });
-    await useAllButton.click({ timeout: 10_000 });
+    await useAllButton.click({ timeout: 10_000, force: true }).catch(async () => {
+      await useAllButton.evaluate((button) => button.click());
+    });
 
     const popupVotingButton = page
-      .locator('button.layerBtn[data-ga-params="Favorite_투표하기-투표하기"], button.layerBtn:has-text("VOTING")')
+      .locator([
+        'button.layerBtn[data-ga-params="Favorite_투표하기-투표하기"]',
+        'button.layerBtn:has-text("VOTING")',
+        'button.layerBtn:has-text("투표하기")',
+        'button:has-text("VOTING")',
+        'button:has-text("투표하기")',
+        'a.layerBtn:has-text("VOTING")',
+        'a.layerBtn:has-text("투표하기")',
+        '.layerBtn:has-text("VOTING")',
+        '.layerBtn:has-text("투표하기")',
+        'button[data-ga-params*="투표하기"]'
+      ].join(', '))
       .first();
     await popupVotingButton.waitFor({ state: 'visible', timeout: 10_000 });
-    await popupVotingButton.click({ timeout: 10_000 });
+    await popupVotingButton.click({ timeout: 10_000, force: true }).catch(async () => {
+      await popupVotingButton.evaluate((button) => button.click());
+    });
 
     await page.waitForTimeout(5_000);
     console.log('Đã bấm Use All và VOTING trong popup.');
