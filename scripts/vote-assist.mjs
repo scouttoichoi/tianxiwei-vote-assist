@@ -631,11 +631,71 @@ async function fillBugsSignup(page, state) {
 
 
 
+async function waitForTurnstileSuccess(page, timeoutMs = 90_000) {
+  console.log('[Cloudflare Turnstile] Đang kiểm tra trạng thái xác minh Captcha...');
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    let solved = false;
+
+    // Cách 1: Kiểm tra độ dài của Turnstile response token trên trang chính
+    const tokenLength = await page.evaluate(() => {
+      const el = document.querySelector('[name="cf-turnstile-response"]');
+      return el ? el.value.length : 0;
+    }).catch(() => 0);
+
+    if (tokenLength > 10) {
+      solved = true;
+    }
+
+    // Cách 2: Sử dụng Playwright Frame Locator (Bypass mọi giới hạn Sandbox/Cross-Origin)
+    if (!solved) {
+      try {
+        const turnstileIframe = page.frameLocator('iframe[src*="cloudflare"], iframe[src*="challenges"]').first();
+        const successCircle = turnstileIframe.locator('.success-circle');
+        if (await successCircle.count().catch(() => 0) > 0) {
+          solved = true;
+        }
+      } catch (e) {
+        // Ignore
+      }
+    }
+
+    // Cách 3: Dự phòng quét tất cả frames bằng evaluate
+    if (!solved) {
+      for (const frame of page.frames()) {
+        try {
+          const hasCircle = await frame.evaluate(() => {
+            return !!document.querySelector('.success-circle');
+          }).catch(() => false);
+          if (hasCircle) {
+            solved = true;
+            break;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    if (solved) {
+      console.log('[Cloudflare Turnstile] Xác minh Captcha thành công! (Đã nhận diện trạng thái tích xanh)');
+      return true;
+    }
+    await sleep(500);
+  }
+  console.warn('[Cloudflare Turnstile] Hết thời gian chờ xác minh Captcha (90s). Thử tiến hành đăng nhập.');
+  return false;
+}
+
 async function fillBugsLogin(page, account) {
   await openBugsLoginForm(page);
   await page.waitForSelector('#user_id, input[name="user_id"]', { timeout: 60_000 });
   await fillBySelectors(page, ['#user_id', 'input[name="user_id"]'], account.email);
   await fillBySelectors(page, ['#passwd', 'input[name="passwd"]'], account.password ?? PASSWORD);
+  
+  // Polling liên tục chờ Cloudflare Turnstile tích xanh trước khi nhấn nút Đăng nhập
+  await waitForTurnstileSuccess(page);
+  
   await loginSubmitButton(page).scrollIntoViewIfNeeded().catch(() => { });
   await submitLogin(page);
 }
@@ -711,7 +771,15 @@ async function fillBySelectors(page, selectors, value) {
           : HTMLInputElement.prototype;
         const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
         descriptor?.set?.call(element, nextValue);
+        
+        // Dispatch tất cả sự kiện để xóa placeholder trùng lặp của website
+        element.focus();
+        element.click();
+        element.dispatchEvent(new Event('focus', { bubbles: true }));
+        element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+        element.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true }));
         element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
         element.dispatchEvent(new Event('change', { bubbles: true }));
         element.dispatchEvent(new Event('blur', { bubbles: true }));
         return true;
