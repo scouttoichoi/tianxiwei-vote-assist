@@ -1287,7 +1287,7 @@ function translateWorkerLog(text) {
         .replace('{top}', scoreMatch[2].replace(/,$/, ''));
     }
 
-    if (trimmed.includes('Đã bấm Use All') || trimmed.includes('VOTING')) {
+    if (trimmed.includes('[VOTE PROCESS] Đã click nút VOTING')) {
       return t('workerVoteSubmitted');
     }
 
@@ -1377,6 +1377,8 @@ signupButton.addEventListener('click', async () => {
   if (!selectedInstanceId) return;
   appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Đăng Ký và Vote' được click! Lớp btnDashboardStop: ${signupButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
   if (signupButton.classList.contains('btnDashboardStop')) {
+    signupButton.disabled = true;
+    signupButton.innerHTML = `<span>Đang dừng...</span><small>Vui lòng đợi giây lát</small>`;
     appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Gửi lệnh dừng qua IPC...\n`);
     try {
       const res = await window.txw.stopInstance(selectedInstanceId);
@@ -1394,6 +1396,8 @@ signupManualButton.addEventListener('click', async () => {
   if (!selectedInstanceId) return;
   appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Đăng Ký (tự nhập captcha)' được click! Lớp btnDashboardStop: ${signupManualButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
   if (signupManualButton.classList.contains('btnDashboardStop')) {
+    signupManualButton.disabled = true;
+    signupManualButton.innerHTML = `<span>Đang dừng...</span><small>Vui lòng đợi giây lát</small>`;
     appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Gửi lệnh dừng qua IPC...\n`);
     try {
       const res = await window.txw.stopInstance(selectedInstanceId);
@@ -1411,6 +1415,8 @@ loginButton.addEventListener('click', async () => {
   if (!selectedInstanceId) return;
   appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Dừng Vote Tài Khoản Cũ' được click! Lớp btnDashboardStop: ${loginButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
   if (loginButton.classList.contains('btnDashboardStop')) {
+    loginButton.disabled = true;
+    loginButton.innerHTML = `<span>Đang dừng...</span><small>Vui lòng đợi giây lát</small>`;
     appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Gửi lệnh dừng qua IPC...\n`);
     try {
       const res = await window.txw.stopInstance(selectedInstanceId);
@@ -1428,6 +1434,8 @@ adsButton.addEventListener('click', async () => {
   if (!selectedInstanceId) return;
   appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Xem Quảng Cáo' được click! Lớp btnDashboardStop: ${adsButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
   if (adsButton.classList.contains('btnDashboardStop')) {
+    adsButton.disabled = true;
+    adsButton.innerHTML = `<span>Đang dừng...</span><small>Vui lòng đợi giây lát</small>`;
     appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Gửi lệnh dừng qua IPC...\n`);
     try {
       const res = await window.txw.stopInstance(selectedInstanceId);

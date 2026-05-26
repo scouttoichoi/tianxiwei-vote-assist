@@ -9,6 +9,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'TianXiweiVoteAssistAp
 
 let mainWindow;
 const activeWorkers = new Map(); // key: instanceId, value: childProcess
+const activeWorkerModes = new Map(); // key: instanceId, value: current UI mode
 const stoppingWorkers = new Set(); // key: instanceId, true when user intentionally stops a worker
 const activeAdbDevices = new Map(); // // adbLockKey -> instanceId
 let lastNotificationKey = '';
@@ -144,33 +145,60 @@ async function stopWorkerByInstanceId(instanceId) {
 
   stoppingWorkers.add(targetId);
 
+  const trySignal = (procLike, signal) => {
+    if (!procLike) return false;
+
+    try {
+      if (typeof procLike.kill === 'function') {
+        procLike.kill(signal);
+        return true;
+      }
+
+      if (typeof procLike.pid === 'number' && procLike.pid > 0) {
+        process.kill(procLike.pid, signal);
+        return true;
+      }
+    } catch (error) {
+      console.warn(`[DEBUG stopWorkerByInstanceId] Failed to send ${signal} to PID ${procLike?.pid ?? 'unknown'}:`, error);
+    }
+
+    return false;
+  };
+
+  // Send a graceful SIGTERM signal first
   try {
-    if (typeof child.kill === 'function') {
-      child.kill();
-    } else if (child.child && typeof child.child.kill === 'function') {
-      child.child.kill();
-    } else {
+    const terminated =
+      trySignal(child, 'SIGTERM') ||
+      trySignal(child.child, 'SIGTERM');
+
+    if (!terminated) {
       console.warn(`[DEBUG stopWorkerByInstanceId] No kill method found on child process object!`);
     }
   } catch (err) {
     console.error(`[DEBUG stopWorkerByInstanceId] Error calling child.kill():`, err);
   }
 
+  // Set a robust timeout to force kill the process with SIGKILL if it has not exited yet
   setTimeout(() => {
-    if (!activeWorkers.has(targetId)) return;
-    try {
-      if (typeof child.kill === 'function') {
-        child.kill('SIGKILL');
-      } else if (child.child && typeof child.child.kill === 'function') {
-        child.child.kill('SIGKILL');
+    // If the process is still running (i.e. still in the activeWorkers Map), we force kill it!
+    if (activeWorkers.has(targetId)) {
+      console.warn(`[DEBUG stopWorkerByInstanceId] Worker "${targetId}" did not exit within ${FORCE_KILL_DELAY_MS}ms. Sending SIGKILL...`);
+      try {
+        trySignal(child, 'SIGKILL');
+        trySignal(child.child, 'SIGKILL');
+      } catch (e) {
+        console.error(`[DEBUG stopWorkerByInstanceId] Error force killing worker:`, e);
       }
-    } catch {
-      // Ignore force kill errors.
+      
+      // Cleanup synchronously as a last resort if SIGKILL is sent
+      activeWorkers.delete(targetId);
+      activeWorkerModes.delete(targetId);
+      stoppingWorkers.delete(targetId);
+      send('run-state', { instanceId: targetId, running: false });
+      send('data-updated', { instanceId: targetId });
     }
   }, FORCE_KILL_DELAY_MS);
 
-  activeWorkers.delete(targetId);
-  send('run-state', { instanceId: targetId, running: false });
   return true;
 }
 
@@ -230,6 +258,7 @@ function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '', o
     });
     child.on('error', (error) => {
       activeWorkers.delete(instanceId);
+      activeWorkerModes.delete(instanceId);
       stoppingWorkers.delete(instanceId);
       send('run-state', { instanceId, running: false });
       send('data-updated', { instanceId });
@@ -238,6 +267,7 @@ function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '', o
     child.on('exit', (code, signal) => {
       const wasStopped = stoppingWorkers.delete(instanceId);
       activeWorkers.delete(instanceId);
+      activeWorkerModes.delete(instanceId);
       send('run-state', { instanceId, running: false });
       send('data-updated', { instanceId });
 
@@ -975,6 +1005,7 @@ ipcMain.handle('instances:list', async () => {
   // Bổ sung thông tin trạng thái chạy động và thống kê vote
   const result = await Promise.all(list.map(async (inst) => {
     const running = activeWorkers.has(inst.id);
+    const runningMode = running ? (activeWorkerModes.get(inst.id) || null) : null;
     const accounts = await readAccounts(inst.id);
     const summary = await readScoreSummary(inst.id);
 
@@ -983,6 +1014,7 @@ ipcMain.handle('instances:list', async () => {
     return {
       ...inst,
       running,
+      runningMode,
       totalAccounts: accounts.length,
       votedTodayCount,
       latestScore: summary.latest
@@ -1162,6 +1194,7 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
       if (startingChild) startingChild.kill();
     }
   });
+  activeWorkerModes.set(instanceId, uiMode);
 
   send('run-state', { instanceId, running: true, mode: uiMode });
 
@@ -1198,6 +1231,7 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
         activeAdbDevices.delete(lock);
       }
       activeWorkers.delete(instanceId);
+      activeWorkerModes.delete(instanceId);
       stoppingWorkers.delete(instanceId);
       send('data-updated', { instanceId });
       send('run-state', { instanceId, running: false, mode: uiMode });
@@ -1221,6 +1255,7 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
       for (const lock of adbDeviceLocks) {
         activeAdbDevices.delete(lock);
       }
+      activeWorkerModes.delete(instanceId);
       stoppingWorkers.delete(instanceId);
       send('data-updated', { instanceId });
       send('run-state', { instanceId, running: false, mode: uiMode });

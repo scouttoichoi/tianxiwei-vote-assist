@@ -1625,47 +1625,113 @@ async function completeFavoriteVote(page, voteState) {
     });
     console.log('[VOTE PROCESS] Đã click nút VOTING (투표하기).');
 
-    console.log('[VOTE PROCESS] Bước 6: Đang chờ website phản hồi kết quả vote qua dialog...');
+    console.log('[VOTE PROCESS] Bước 6: Đang chờ website phản hồi kết quả vote qua dialog hoặc popup DOM...');
     const start = Date.now();
     let checked = false;
-    while (Date.now() - start < 8000) {
+    let isSuccess = false;
+    let isInsufficientHearts = false;
+    let isLimitExceeded = false;
+    let isLoginRequired = false;
+    let detailMessage = '';
+
+    while (Date.now() - start < 10000) { // Tăng thời gian chờ lên 10 giây để đảm bảo nhận diện tốt
+      // 1. Kiểm tra nếu có dialog thực sự xuất hiện
       if (voteState.dialogReceived) {
+        detailMessage = voteState.lastDialogMessage || '';
+        console.log(`[VOTE PROCESS] Phản hồi nhận được từ browser dialog: "${detailMessage}"`);
+        
+        isInsufficientHearts = detailMessage.includes('부족') || detailMessage.toLowerCase().includes('insufficient') || detailMessage.toLowerCase().includes('heart') || detailMessage.includes('하트');
+        isLimitExceeded = detailMessage.includes('초과') || detailMessage.includes('이미') || detailMessage.toLowerCase().includes('limit') || detailMessage.toLowerCase().includes('already');
+        isLoginRequired = detailMessage.includes('로그인') || detailMessage.toLowerCase().includes('login') || detailMessage.toLowerCase().includes('session');
+        isSuccess = detailMessage.includes('완료') || detailMessage.includes('참여') || detailMessage.includes('감사') || detailMessage.toLowerCase().includes('success') || detailMessage.toLowerCase().includes('complete') || detailMessage.toLowerCase().includes('thank');
+        
         checked = true;
         break;
       }
-      await page.waitForTimeout(200);
+
+      // 2. Kiểm tra các DOM modal popup xuất hiện trực tiếp trên trang (Bugs thường dùng layer/alert modal)
+      const domResult = await page.evaluate(() => {
+        const popupSelectors = [
+          'div[class*="layer"]',
+          'div[class*="popup"]',
+          '.layerWrap',
+          '#layerWrap',
+          '.alert',
+          '.modal',
+          '[role="dialog"]'
+        ];
+
+        for (const selector of popupSelectors) {
+          const nodes = [...document.querySelectorAll(selector)];
+          const visibleNode = nodes.find((node) => {
+            const rect = node.getBoundingClientRect();
+            return rect.width > 40 && rect.height > 40;
+          });
+
+          if (!visibleNode) continue;
+
+          const txt = (visibleNode.textContent || '').trim();
+          if (txt) return txt;
+        }
+
+        const bodyText = (document.body?.innerText || document.body?.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!bodyText) return '';
+
+        if (
+          bodyText.includes('Your vote has been completed') ||
+          bodyText.includes('It takes up to 10 minutes to reflect the vote') ||
+          bodyText.includes('Another vote') ||
+          bodyText.includes('Heart Station') ||
+          /\b\d+\s*vote\(s\)\b/i.test(bodyText)
+        ) {
+          return 'Your vote has been completed';
+        }
+
+        if (bodyText.includes('부족') || bodyText.includes('Insufficient') || bodyText.includes('하트 부족')) {
+          return 'Insufficient hearts';
+        }
+
+        return '';
+      }).catch(() => '');
+
+      if (domResult) {
+        detailMessage = domResult.trim().replace(/\s+/g, ' ');
+        console.log(`[VOTE PROCESS] Phát hiện DOM modal kết quả trên trang: "${detailMessage}"`);
+
+        isInsufficientHearts = detailMessage.includes('부족') || detailMessage.toLowerCase().includes('insufficient') || detailMessage.toLowerCase().includes('heart') || detailMessage.includes('하트');
+        isLimitExceeded = detailMessage.includes('초과') || detailMessage.includes('이미') || detailMessage.toLowerCase().includes('limit') || detailMessage.toLowerCase().includes('already');
+        isLoginRequired = detailMessage.includes('로그인') || detailMessage.toLowerCase().includes('login') || detailMessage.toLowerCase().includes('session');
+        isSuccess = detailMessage.includes('완료') || detailMessage.includes('참여') || detailMessage.includes('감사') || detailMessage.toLowerCase().includes('success') || detailMessage.toLowerCase().includes('complete') || detailMessage.toLowerCase().includes('thank') || detailMessage.toLowerCase().includes('completed');
+
+        checked = true;
+        break;
+      }
+
+      await page.waitForTimeout(300);
     }
 
-    if (voteState.dialogReceived) {
-      const msg = voteState.lastDialogMessage || '';
-      console.log(`[VOTE PROCESS] Phản hồi nhận được từ dialog: "${msg}"`);
-      
-      const isInsufficientHearts = msg.includes('부족') || msg.toLowerCase().includes('insufficient') || msg.toLowerCase().includes('heart');
-      const isLimitExceeded = msg.includes('초과') || msg.includes('이미') || msg.toLowerCase().includes('limit') || msg.toLowerCase().includes('already');
-      const isLoginRequired = msg.includes('로그인') || msg.toLowerCase().includes('login') || msg.toLowerCase().includes('session');
-      const isSuccess = msg.includes('완료') || msg.includes('참여') || msg.includes('감사') || msg.toLowerCase().includes('success') || msg.toLowerCase().includes('complete') || msg.toLowerCase().includes('thank');
-
+    if (checked) {
       if (isInsufficientHearts) {
-        console.error(`❌ [VOTE PROCESS] Thất bại: Tài khoản không đủ tim (하트 부족). Chi tiết: "${msg}"`);
+        console.error(`❌ [VOTE PROCESS] Thất bại: Tài khoản không đủ tim (하트 부족). Chi tiết: "${detailMessage}"`);
         return false;
       }
       if (isLimitExceeded) {
-        console.error(`❌ [VOTE PROCESS] Thất bại: Đã hết lượt vote hôm nay hoặc vượt quá giới hạn (초과 / 이미 참여). Chi tiết: "${msg}"`);
+        console.error(`❌ [VOTE PROCESS] Thất bại: Đã hết lượt vote hôm nay hoặc vượt quá giới hạn (초과 / 이미 참여). Chi tiết: "${detailMessage}"`);
         return false;
       }
       if (isLoginRequired) {
-        console.error(`❌ [VOTE PROCESS] Thất bại: Hết phiên đăng nhập hoặc yêu cầu login. Chi tiết: "${msg}"`);
+        console.error(`❌ [VOTE PROCESS] Thất bại: Hết phiên đăng nhập hoặc yêu cầu login. Chi tiết: "${detailMessage}"`);
         return false;
       }
       if (isSuccess) {
-        console.log(`✅ [VOTE PROCESS] Thành công: Đã ghi nhận vote thành công! Chi tiết: "${msg}"`);
+        console.log(`✅ [VOTE PROCESS] Thành công: Đã ghi nhận vote thành công! Chi tiết: "${detailMessage}"`);
         return true;
       }
 
-      console.warn(`⚠️ [VOTE PROCESS] Nhận dialog không rõ từ khóa: "${msg}". Mặc định coi là THẤT BẠI.`);
+      console.warn(`⚠️ [VOTE PROCESS] Cảnh báo: Nhận phản hồi không rõ từ khóa: "${detailMessage}". Mặc định coi là THẤT BẠI.`);
       return false;
     } else {
-      console.warn('⚠️ [VOTE PROCESS] Cảnh báo: Không có dialog/alert nào hiển thị từ website sau 8 giây.');
+      console.warn('⚠️ [VOTE PROCESS] Cảnh báo: Không có dialog hay DOM popup kết quả nào hiển thị từ website sau 10 giây.');
       return false;
     }
   } catch (error) {
