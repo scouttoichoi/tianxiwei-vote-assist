@@ -1491,9 +1491,12 @@ runAllSignupButton.addEventListener('click', async () => {
     return;
   }
 
-  for (const inst of instances) {
-    if (!inst.running) {
-      startInstanceProcess(inst.id, 'signup', { count }, false);
+  const snapshot = [...instances];
+  for (const inst of snapshot) {
+    const latest = instances.find((item) => item.id === inst.id) || inst;
+    if (!latest.running) {
+      await startInstanceProcess(inst.id, 'signup', { count }, false);
+      await refreshInstances();
       await new Promise((resolve) => setTimeout(resolve, 8000));
     }
   }
@@ -1508,18 +1511,24 @@ runAllSignupManualButton.addEventListener('click', async () => {
     return;
   }
 
-  for (const inst of instances) {
-    if (!inst.running) {
-      startInstanceProcess(inst.id, 'signup-manual', { count, manualCaptcha: true }, false);
+  const snapshot = [...instances];
+  for (const inst of snapshot) {
+    const latest = instances.find((item) => item.id === inst.id) || inst;
+    if (!latest.running) {
+      await startInstanceProcess(inst.id, 'signup-manual', { count, manualCaptcha: true }, false);
+      await refreshInstances();
       await new Promise((resolve) => setTimeout(resolve, 8000));
     }
   }
 });
 
 runAllLoginButton.addEventListener('click', async () => {
-  for (const inst of instances) {
-    if (!inst.running) {
-      startInstanceProcess(inst.id, 'login', {}, false);
+  const snapshot = [...instances];
+  for (const inst of snapshot) {
+    const latest = instances.find((item) => item.id === inst.id) || inst;
+    if (!latest.running) {
+      await startInstanceProcess(inst.id, 'login', {}, false);
+      await refreshInstances();
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }

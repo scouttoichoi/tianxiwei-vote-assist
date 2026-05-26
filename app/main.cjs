@@ -1125,7 +1125,7 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
       };
     }
 
-    await runUtility(
+    const workerPromise = runUtility(
       path.join(__dirname, 'runner.cjs'),
       runnerArgs,
       instanceDir,
@@ -1135,6 +1135,23 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
         startingChild = child;
       }
     );
+
+    workerPromise.catch((error) => {
+      const message = error?.stack || error?.message || String(error);
+      send('worker-log', {
+        instanceId,
+        text: `\n${message}\n`
+      });
+    }).finally(() => {
+      for (const lock of adbDeviceLocks) {
+        activeAdbDevices.delete(lock);
+      }
+      activeWorkers.delete(instanceId);
+      stoppingWorkers.delete(instanceId);
+      send('data-updated', { instanceId });
+      send('run-state', { instanceId, running: false, mode: uiMode });
+    });
+
     return {
       ok: true
     };
@@ -1149,13 +1166,14 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
       error: error?.message || String(error)
     };
   } finally {
-    for (const lock of adbDeviceLocks) {
-      activeAdbDevices.delete(lock);
+    if (!startingChild && !activeWorkers.has(instanceId)) {
+      for (const lock of adbDeviceLocks) {
+        activeAdbDevices.delete(lock);
+      }
+      stoppingWorkers.delete(instanceId);
+      send('data-updated', { instanceId });
+      send('run-state', { instanceId, running: false, mode: uiMode });
     }
-    activeWorkers.delete(instanceId);
-    stoppingWorkers.delete(instanceId);
-    send('data-updated', { instanceId });
-    send('run-state', { instanceId, running: false, mode: uiMode });
   }
 });
 
