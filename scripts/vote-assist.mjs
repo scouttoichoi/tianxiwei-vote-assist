@@ -35,6 +35,38 @@ const TEMP_MAIL_PROVIDERS = [
       'text=Refresh',
       '[aria-label*="refresh" i]'
     ]
+  },
+  {
+    id: 'tempmail-id-vn',
+    label: 'tempmail.id.vn',
+    url: 'https://tempmail.id.vn/inbox',
+    rotateSelectors: [
+      'button:has-text("Tạo mới")',
+      'button:has-text("Làm mới")',
+      'button:has-text("Xóa")',
+      'text=Tạo mới',
+      'text=Xóa'
+    ],
+    refreshSelectors: [
+      'button:has-text("Làm mới")',
+      'text=Làm mới'
+    ]
+  },
+  {
+    id: 'mail-tm',
+    label: 'mail.tm',
+    url: 'https://mail.tm/en/',
+    rotateSelectors: [
+      'button:has-text("Create an account")',
+      'button:has-text("Delete account")',
+      'text=Create an account',
+      'text=Delete account'
+    ],
+    refreshSelectors: [
+      'button:has-text("Refresh")',
+      'a:has-text("Refresh")',
+      'text=Refresh'
+    ]
   }
 ];
 const BUGS_SIGNUP_URL = 'https://secure.bugs.co.kr/member/join/foreignerMemberMain';
@@ -506,6 +538,18 @@ async function launchBrowser(api, config) {
 
 async function getTempMailAddress(page, provider = TEMP_MAIL_PROVIDERS[0]) {
   await page.waitForLoadState('domcontentloaded');
+
+  // Hỗ trợ sinh email tự động cho tempmail.id.vn trên một trình duyệt mới hoàn toàn
+  if (provider.id === 'tempmail-id-vn') {
+    const randomBtn = page.locator('button:has-text("Tạo ngẫu nhiên")').first();
+    if (await randomBtn.count().catch(() => 0)) {
+      if (await randomBtn.isVisible().catch(() => false)) {
+        console.log('[tempmail.id.vn] Đang click "Tạo ngẫu nhiên" để kích hoạt email...');
+        await randomBtn.click({ force: true }).catch(() => { });
+        await page.waitForTimeout(5000); // Đợi Livewire sinh mail
+      }
+    }
+  }
 
   for (let randomAttempt = 0; randomAttempt < 8; randomAttempt += 1) {
     const email = await readTempMailAddress(page);
