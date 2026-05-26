@@ -372,7 +372,13 @@ async function handleRowAction(instanceId, action) {
   } else if (action === 'start-login') {
     startInstanceProcess(instanceId, 'login');
   } else if (action === 'stop') {
-    await window.txw.stopInstance(instanceId);
+    console.log(`[UI] handleRowAction 'stop' for instanceId: "${instanceId}"`);
+    try {
+      const res = await window.txw.stopInstance(instanceId);
+      console.log(`[UI] handleRowAction 'stop' result:`, res);
+    } catch (err) {
+      console.error(`[UI] Error in handleRowAction 'stop':`, err);
+    }
   } else if (action === 'edit') {
     openInstanceForm(instanceId);
   } else if (action === 'delete') {
@@ -485,9 +491,15 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
       stopBtn.dataset.action = 'stop';
       stopBtn.title = t('stop') || 'Dừng';
       stopBtn.textContent = '⏹';
-      stopBtn.addEventListener('click', (e) => {
+      stopBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        window.txw.stopInstance(instanceId);
+        console.log(`[UI] stopBtn row clicked for instanceId: "${instanceId}"`);
+        try {
+          const res = await window.txw.stopInstance(instanceId);
+          console.log(`[UI] stopInstance from row result:`, res);
+        } catch (err) {
+          console.error(`[UI] Error stopping instance from row:`, err);
+        }
       });
       rowActions.insertBefore(stopBtn, rowActions.firstChild);
     }
@@ -1361,32 +1373,71 @@ languageSelect?.addEventListener('change', (event) => {
 document.getElementById('closeModal').addEventListener('click', () => modal.close());
 
 // Selected Instance Action Events
-signupButton.addEventListener('click', () => {
+signupButton.addEventListener('click', async () => {
+  if (!selectedInstanceId) return;
+  appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Đăng Ký và Vote' được click! Lớp btnDashboardStop: ${signupButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
   if (signupButton.classList.contains('btnDashboardStop')) {
-    window.txw.stopInstance(selectedInstanceId);
+    appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Gửi lệnh dừng qua IPC...\n`);
+    try {
+      const res = await window.txw.stopInstance(selectedInstanceId);
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Kết quả IPC dừng: ${res}\n`);
+      console.log(`[UI] stopInstance (signup) result:`, res);
+    } catch (err) {
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Lỗi IPC dừng: ${err.message}\n`);
+      console.error(`[UI] Error stopping instance (signup):`, err);
+    }
   } else {
     startInstanceProcess(selectedInstanceId, 'signup');
   }
 });
-signupManualButton.addEventListener('click', () => {
+signupManualButton.addEventListener('click', async () => {
+  if (!selectedInstanceId) return;
+  appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Đăng Ký (tự nhập captcha)' được click! Lớp btnDashboardStop: ${signupManualButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
   if (signupManualButton.classList.contains('btnDashboardStop')) {
-    window.txw.stopInstance(selectedInstanceId);
+    appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Gửi lệnh dừng qua IPC...\n`);
+    try {
+      const res = await window.txw.stopInstance(selectedInstanceId);
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Kết quả IPC dừng: ${res}\n`);
+      console.log(`[UI] stopInstance (signup-manual) result:`, res);
+    } catch (err) {
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Lỗi IPC dừng: ${err.message}\n`);
+      console.error(`[UI] Error stopping instance (signup-manual):`, err);
+    }
   } else {
     startInstanceProcess(selectedInstanceId, 'signup-manual');
   }
 });
-loginButton.addEventListener('click', () => {
+loginButton.addEventListener('click', async () => {
+  if (!selectedInstanceId) return;
+  appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Dừng Vote Tài Khoản Cũ' được click! Lớp btnDashboardStop: ${loginButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
   if (loginButton.classList.contains('btnDashboardStop')) {
-    window.txw.stopInstance(selectedInstanceId);
+    appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Gửi lệnh dừng qua IPC...\n`);
+    try {
+      const res = await window.txw.stopInstance(selectedInstanceId);
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Kết quả IPC dừng: ${res}\n`);
+      console.log(`[UI] stopInstance (login) result:`, res);
+    } catch (err) {
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Lỗi IPC dừng: ${err.message}\n`);
+      console.error(`[UI] Error stopping instance (login):`, err);
+    }
   } else {
     startInstanceProcess(selectedInstanceId, 'login');
   }
 });
-adsButton.addEventListener('click', () => {
+adsButton.addEventListener('click', async () => {
+  if (!selectedInstanceId) return;
+  appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Xem Quảng Cáo' được click! Lớp btnDashboardStop: ${adsButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
   if (adsButton.classList.contains('btnDashboardStop')) {
-    window.txw.stopInstance(selectedInstanceId);
+    appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Gửi lệnh dừng qua IPC...\n`);
+    try {
+      const res = await window.txw.stopInstance(selectedInstanceId);
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Kết quả IPC dừng: ${res}\n`);
+      console.log(`[UI] stopInstance (ads) result:`, res);
+    } catch (err) {
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Lỗi IPC dừng: ${err.message}\n`);
+      console.error(`[UI] Error stopping instance (ads):`, err);
+    }
   } else {
-    if (!selectedInstanceId) return;
     openEmulatorPicker();
   }
 });

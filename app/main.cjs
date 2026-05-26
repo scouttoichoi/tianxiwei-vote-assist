@@ -107,35 +107,70 @@ function isIpTemporarilyBlockedLog(text) {
 }
 
 async function stopWorkerByInstanceId(instanceId) {
+  const idStr = String(instanceId || '').trim();
+  console.log(`[DEBUG stopWorkerByInstanceId] Called with instanceId: "${instanceId}" (coerced: "${idStr}")`);
+  console.log(`[DEBUG stopWorkerByInstanceId] Active workers in Map:`, [...activeWorkers.keys()]);
+
+  // Clean up ADB device locks for this instance
   for (const [deviceId, ownerInstanceId] of activeAdbDevices.entries()) {
-    if (ownerInstanceId === instanceId) {
+    if (String(ownerInstanceId || '').trim() === idStr) {
       activeAdbDevices.delete(deviceId);
     }
   }
 
-  if (!activeWorkers.has(instanceId)) return false;
-  const child = activeWorkers.get(instanceId);
-  if (!child) return false;
+  // Find exact key or trimmed string match key in Map
+  let targetId = null;
+  if (activeWorkers.has(idStr)) {
+    targetId = idStr;
+  } else {
+    for (const key of activeWorkers.keys()) {
+      if (String(key).trim() === idStr) {
+        targetId = key;
+        break;
+      }
+    }
+  }
 
-  stoppingWorkers.add(instanceId);
+  if (!targetId) {
+    console.warn(`[DEBUG stopWorkerByInstanceId] Worker with ID "${instanceId}" NOT found in activeWorkers!`);
+    return false;
+  }
+
+  const child = activeWorkers.get(targetId);
+  if (!child) {
+    console.warn(`[DEBUG stopWorkerByInstanceId] Worker found but child process object is falsy!`);
+    return false;
+  }
+
+  stoppingWorkers.add(targetId);
 
   try {
-    child.kill();
-  } catch {
-    // Ignore initial kill errors and still try cleanup/fallback.
+    if (typeof child.kill === 'function') {
+      child.kill();
+    } else if (child.child && typeof child.child.kill === 'function') {
+      child.child.kill();
+    } else {
+      console.warn(`[DEBUG stopWorkerByInstanceId] No kill method found on child process object!`);
+    }
+  } catch (err) {
+    console.error(`[DEBUG stopWorkerByInstanceId] Error calling child.kill():`, err);
   }
 
   setTimeout(() => {
-    if (!activeWorkers.has(instanceId)) return;
+    if (!activeWorkers.has(targetId)) return;
     try {
-      child.kill('SIGKILL');
+      if (typeof child.kill === 'function') {
+        child.kill('SIGKILL');
+      } else if (child.child && typeof child.child.kill === 'function') {
+        child.child.kill('SIGKILL');
+      }
     } catch {
       // Ignore force kill errors.
     }
   }, FORCE_KILL_DELAY_MS);
 
-  activeWorkers.delete(instanceId);
-  send('run-state', { instanceId, running: false });
+  activeWorkers.delete(targetId);
+  send('run-state', { instanceId: targetId, running: false });
   return true;
 }
 
@@ -721,16 +756,32 @@ async function readScoreSummary(instanceId) {
 async function readAccounts(instanceId) {
   const accountsPath = getAccountsPath(instanceId);
   try {
-    return JSON.parse(await fs.readFile(accountsPath, 'utf8'));
-  } catch {
-    return [];
+    const content = await fs.readFile(accountsPath, 'utf8');
+    if (!content.trim()) return [];
+    const accounts = JSON.parse(content);
+    return Array.isArray(accounts) ? accounts : [];
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return [];
+    }
+    console.error(`❌ [FATAL] Không thể đọc hoặc parse file accounts.json cho instance ${instanceId}: ${error.message}`);
+    throw error;
   }
 }
 
 async function saveAccounts(instanceId, accounts) {
   const accountsPath = getAccountsPath(instanceId);
-  await fs.mkdir(path.dirname(accountsPath), { recursive: true });
-  await fs.writeFile(accountsPath, `${JSON.stringify(accounts, null, 2)}\n`);
+  const dir = path.dirname(accountsPath);
+  await fs.mkdir(dir, { recursive: true });
+  const tmpPath = `${accountsPath}.tmp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  try {
+    await fs.writeFile(tmpPath, `${JSON.stringify(accounts, null, 2)}\n`, 'utf8');
+    await fs.rename(tmpPath, accountsPath);
+  } catch (err) {
+    console.error(`❌ [FATAL] Không thể ghi file accounts.json an toàn cho instance ${instanceId}: ${err.message}`);
+    await fs.rm(tmpPath, { force: true }).catch(() => {});
+    throw err;
+  }
 }
 
 function parseProxyString(proxyStr) {

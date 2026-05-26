@@ -1040,14 +1040,16 @@ async function waitAfterLoginSubmit(context, page, initialLoginUrl) {
       .catch(() => false);
 
     if (!stillOnLoginPath || !loginFormVisible) {
-      await sleep(800);
+      console.log('[LOGIN] Đăng nhập thành công (Đã chuyển hướng hoặc ẩn form login). Đợi 4 giây để load hoàn tất token/session...');
+      await sleep(4_000);
       return true;
     }
 
     const pages = typeof context.pages === 'function' ? context.pages() : [page];
     for (const currentPage of pages) {
       if (await hasLoggedInIndicators(currentPage)) {
-        await sleep(800);
+        console.log('[LOGIN] Phát hiện biểu tượng login thành công. Đợi 4 giây...');
+        await sleep(4_000);
         return true;
       }
     }
@@ -1344,9 +1346,17 @@ async function hasFavoriteCandidate(page) {
 async function voteFavorite(context, config = {}) {
   const votePage = await context.newPage();
   
+  const voteState = {
+    lastDialogMessage: '',
+    dialogReceived: false
+  };
+
   // Đăng ký bộ lắng nghe dialog trên trang vote để phát hiện thông báo lỗi (như hết tim, lỗi phiên...)
   votePage.on('dialog', async (dialog) => {
-    console.log(`💬 [VOTE] Phát hiện thông báo từ trang web: [${dialog.message()}]`);
+    const msg = dialog.message();
+    voteState.lastDialogMessage = msg;
+    voteState.dialogReceived = true;
+    console.log(`💬 [VOTE] Phát hiện thông báo từ trang web: [${msg}]`);
     await dialog.dismiss().catch(() => {});
   });
 
@@ -1387,7 +1397,7 @@ async function voteFavorite(context, config = {}) {
     }
 
     console.log('[VOTE] Đã thấy candidate. Thử bấm vote...');
-    const voted = await completeFavoriteVote(votePage);
+    const voted = await completeFavoriteVote(votePage, voteState);
     if (voted) {
       return true;
     }
@@ -1464,18 +1474,22 @@ function csvValue(value) {
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-async function completeFavoriteVote(page) {
+async function completeFavoriteVote(page, voteState) {
   const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
   const voteButton = candidate
     .locator('button.btnVote[data-action="vote_candidate"][data-candidate-id="11046"]')
     .first();
 
   try {
+    console.log('[VOTE PROCESS] Bước 1: Đợi candidate TIAN Xiwei hiển thị...');
     await candidate.waitFor({ state: 'visible', timeout: 15_000 });
     await voteButton.waitFor({ state: 'visible', timeout: 15_000 });
     await voteButton.scrollIntoViewIfNeeded();
+
+    console.log('[VOTE PROCESS] Bước 2: Click nút vote candidate...');
     await voteButton.click({ timeout: 8_000, force: true });
 
+    console.log('[VOTE PROCESS] Bước 3: Đợi popup chọn số tim hiển thị...');
     const popupOpened = await page
       .locator('button[data-ga-params="Favorite_투표하기-모두사용"], button:has-text("Use All")')
       .first()
@@ -1484,50 +1498,110 @@ async function completeFavoriteVote(page) {
       .catch(() => false);
 
     if (!popupOpened) {
+      console.warn('[VOTE PROCESS] Popup chưa mở qua click trực tiếp, thử click bằng evaluate...');
       await voteButton.evaluate((button) => button.click());
     }
 
+    // Tìm nút "Use All" (모두사용) trong popup
     const useAllButton = page
       .locator([
-        'button[data-ga-params="Favorite_투표하기-모du-사용"]',
-        'button[data-ga-params="Favorite_투표하기-모du-사용"]',
-        'button[data-ga-params="Favorite_투표하기-모두사용"]',
+        'div[class*="layer"] button:has-text("Use All")',
+        'div[class*="layer"] button:has-text("모두사용")',
+        'div[class*="layer"] a:has-text("Use All")',
+        'div[class*="layer"] a:has-text("모두사용")',
+        '.layerBtn:has-text("Use All")',
+        '.layerBtn:has-text("모두사용")',
+        'button[data-ga-params*="모두사용"]',
         'button:has-text("Use All")',
-        'button:has-text("모두사용")',
-        'a:has-text("Use All")',
-        'a:has-text("모두사용")',
-        '[data-ga-params*="모두사용"]'
+        'button:has-text("모두사용")'
       ].join(', '))
+      .filter({ visible: true })
       .first();
+
+    console.log('[VOTE PROCESS] Bước 4: Đợi nút Use All (모두사용) hiển thị và click...');
     await useAllButton.waitFor({ state: 'visible', timeout: 10_000 });
-    await useAllButton.click({ timeout: 10_000, force: true }).catch(async () => {
+    await useAllButton.click({ timeout: 8_000, force: true }).catch(async () => {
+      console.warn('[VOTE PROCESS] Click Use All trực tiếp thất bại, thử click bằng evaluate...');
       await useAllButton.evaluate((button) => button.click());
     });
+    console.log('[VOTE PROCESS] Đã click nút Use All (모두사용).');
 
+    // Tìm nút "VOTING" / "투표하기" trong popup
     const popupVotingButton = page
       .locator([
-        'button.layerBtn[data-ga-params="Favorite_투표하기-투표하기"]',
-        'button.layerBtn:has-text("VOTING")',
+        'div[class*="layer"] button:has-text("투표하기")',
+        'div[class*="layer"] button:has-text("VOTING")',
+        'div[class*="layer"] a:has-text("투표하기")',
+        'div[class*="layer"] a:has-text("VOTING")',
         'button.layerBtn:has-text("투표하기")',
-        'button:has-text("VOTING")',
-        'button:has-text("투표하기")',
-        'a.layerBtn:has-text("VOTING")',
+        'button.layerBtn:has-text("VOTING")',
         'a.layerBtn:has-text("투표하기")',
-        '.layerBtn:has-text("VOTING")',
+        'a.layerBtn:has-text("VOTING")',
         '.layerBtn:has-text("투표하기")',
-        'button[data-ga-params*="투표하기"]'
+        '.layerBtn:has-text("VOTING")',
+        'button[data-ga-params="Favorite_투표하기-투표하기"]'
       ].join(', '))
+      .filter({ visible: true })
       .first();
+
+    console.log('[VOTE PROCESS] Bước 5: Đợi nút VOTING (투표하기) hiển thị và click...');
     await popupVotingButton.waitFor({ state: 'visible', timeout: 10_000 });
-    await popupVotingButton.click({ timeout: 10_000, force: true }).catch(async () => {
+    
+    // Reset trạng thái dialog trước khi click để bắt chính xác phản hồi từ cú click này
+    voteState.lastDialogMessage = '';
+    voteState.dialogReceived = false;
+
+    await popupVotingButton.click({ timeout: 8_000, force: true }).catch(async () => {
+      console.warn('[VOTE PROCESS] Click VOTING trực tiếp thất bại, thử click bằng evaluate...');
       await popupVotingButton.evaluate((button) => button.click());
     });
+    console.log('[VOTE PROCESS] Đã click nút VOTING (투표하기).');
 
-    await page.waitForTimeout(5_000);
-    console.log('Đã bấm Use All và VOTING trong popup.');
-    return true;
+    console.log('[VOTE PROCESS] Bước 6: Đang chờ website phản hồi kết quả vote qua dialog...');
+    const start = Date.now();
+    let checked = false;
+    while (Date.now() - start < 8000) {
+      if (voteState.dialogReceived) {
+        checked = true;
+        break;
+      }
+      await page.waitForTimeout(200);
+    }
+
+    if (voteState.dialogReceived) {
+      const msg = voteState.lastDialogMessage || '';
+      console.log(`[VOTE PROCESS] Phản hồi nhận được từ dialog: "${msg}"`);
+      
+      const isInsufficientHearts = msg.includes('부족') || msg.toLowerCase().includes('insufficient') || msg.toLowerCase().includes('heart');
+      const isLimitExceeded = msg.includes('초과') || msg.includes('이미') || msg.toLowerCase().includes('limit') || msg.toLowerCase().includes('already');
+      const isLoginRequired = msg.includes('로그인') || msg.toLowerCase().includes('login') || msg.toLowerCase().includes('session');
+      const isSuccess = msg.includes('완료') || msg.includes('참여') || msg.includes('감사') || msg.toLowerCase().includes('success') || msg.toLowerCase().includes('complete') || msg.toLowerCase().includes('thank');
+
+      if (isInsufficientHearts) {
+        console.error(`❌ [VOTE PROCESS] Thất bại: Tài khoản không đủ tim (하트 부족). Chi tiết: "${msg}"`);
+        return false;
+      }
+      if (isLimitExceeded) {
+        console.error(`❌ [VOTE PROCESS] Thất bại: Đã hết lượt vote hôm nay hoặc vượt quá giới hạn (초과 / 이미 참여). Chi tiết: "${msg}"`);
+        return false;
+      }
+      if (isLoginRequired) {
+        console.error(`❌ [VOTE PROCESS] Thất bại: Hết phiên đăng nhập hoặc yêu cầu login. Chi tiết: "${msg}"`);
+        return false;
+      }
+      if (isSuccess) {
+        console.log(`✅ [VOTE PROCESS] Thành công: Đã ghi nhận vote thành công! Chi tiết: "${msg}"`);
+        return true;
+      }
+
+      console.warn(`⚠️ [VOTE PROCESS] Nhận dialog không rõ từ khóa: "${msg}". Mặc định coi là THẤT BẠI.`);
+      return false;
+    } else {
+      console.warn('⚠️ [VOTE PROCESS] Cảnh báo: Không có dialog/alert nào hiển thị từ website sau 8 giây.');
+      return false;
+    }
   } catch (error) {
-    console.warn(`Không hoàn tất được bước vote tự động: ${error.message}`);
+    console.error(`❌ [VOTE PROCESS] Lỗi trong quá trình thực hiện click vote tự động: ${error.message}`);
     return false;
   }
 }
@@ -1562,16 +1636,30 @@ async function clickFirstAvailable(page, selectors) {
 async function loadAccounts() {
   try {
     const content = await fs.readFile(ACCOUNTS_PATH, 'utf8');
+    if (!content.trim()) return [];
     const accounts = JSON.parse(content);
     return Array.isArray(accounts) ? accounts : [];
-  } catch {
-    return [];
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return [];
+    }
+    console.error(`❌ [FATAL] Không thể đọc hoặc parse file accounts.json: ${error.message}`);
+    throw error;
   }
 }
 
 async function saveAccounts(accounts) {
-  await fs.mkdir(path.dirname(ACCOUNTS_PATH), { recursive: true });
-  await fs.writeFile(ACCOUNTS_PATH, `${JSON.stringify(accounts, null, 2)}\n`);
+  const dir = path.dirname(ACCOUNTS_PATH);
+  await fs.mkdir(dir, { recursive: true });
+  const tmpPath = `${ACCOUNTS_PATH}.tmp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  try {
+    await fs.writeFile(tmpPath, `${JSON.stringify(accounts, null, 2)}\n`, 'utf8');
+    await fs.rename(tmpPath, ACCOUNTS_PATH);
+  } catch (err) {
+    console.error(`❌ [FATAL] Không thể ghi file accounts.json an toàn: ${err.message}`);
+    await fs.rm(tmpPath, { force: true }).catch(() => {});
+    throw err;
+  }
 }
 
 async function saveAccount(state) {
