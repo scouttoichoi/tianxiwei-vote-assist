@@ -634,6 +634,8 @@ async function fillBugsSignup(page, state) {
 async function waitForTurnstileSuccess(page, timeoutMs = 90_000) {
   console.log('[Cloudflare Turnstile] Đang kiểm tra trạng thái xác minh Captcha...');
   const start = Date.now();
+  let lastCheckboxAttemptAt = 0;
+  let lastProgressLogAt = 0;
   while (Date.now() - start < timeoutMs) {
     let solved = false;
 
@@ -681,10 +683,236 @@ async function waitForTurnstileSuccess(page, timeoutMs = 90_000) {
       console.log('[Cloudflare Turnstile] Xác minh Captcha thành công! (Đã nhận diện trạng thái tích xanh)');
       return true;
     }
+
+    if (Date.now() - lastProgressLogAt >= 5_000) {
+      const challengeState = await detectTurnstileChallenge(page).catch(() => ({
+        found: false,
+        frameUrl: '',
+        frameName: '',
+        selector: '',
+        tokenLength: 0,
+        frameSummaries: []
+      }));
+      console.log(
+        `[Cloudflare Turnstile] Polling... tokenLength=${challengeState.tokenLength || 0}, challengeFound=${challengeState.found ? 'yes' : 'no'}${challengeState.selector ? `, selector=${challengeState.selector}` : ''}${challengeState.frameName ? `, frameName=${challengeState.frameName}` : ''}${challengeState.frameUrl ? `, frame=${challengeState.frameUrl}` : ''}`
+      );
+      if (!challengeState.found && challengeState.frameSummaries?.length) {
+        console.log(`[Cloudflare Turnstile] Frame scan: ${challengeState.frameSummaries.slice(0, 12).join(' || ')}`);
+      }
+      lastProgressLogAt = Date.now();
+    }
+
+    if (Date.now() - lastCheckboxAttemptAt >= 2_000) {
+      const assisted = await tryClickTurnstileCheckbox(page).catch(() => ({
+        clicked: false,
+        selector: '',
+        frameUrl: '',
+        method: '',
+        error: ''
+      }));
+      if (assisted.clicked) {
+        console.log(
+          `[Cloudflare Turnstile] Đã thử click checkbox hỗ trợ qua ${assisted.method || 'unknown'}${assisted.selector ? `, selector=${assisted.selector}` : ''}${assisted.frameUrl ? `, frame=${assisted.frameUrl}` : ''}`
+        );
+      } else if (assisted.error) {
+        console.warn(`[Cloudflare Turnstile] Thử click checkbox thất bại: ${assisted.error}`);
+      }
+      lastCheckboxAttemptAt = Date.now();
+    }
+
     await sleep(500);
   }
   console.warn('[Cloudflare Turnstile] Hết thời gian chờ xác minh Captcha (90s). Thử tiến hành đăng nhập.');
   return false;
+}
+
+async function detectTurnstileChallenge(page) {
+  const candidateSelectors = [
+    'label.cb-lb',
+    '.cb-c label',
+    '.cb-c',
+    '#content',
+    '#verifying',
+    'div[role="alert"]',
+    'input[type="checkbox"]',
+    '[role="checkbox"]'
+  ];
+
+  const frames = [page.mainFrame(), ...page.frames()];
+  const frameSummaries = [];
+  for (const frame of frames) {
+    const frameUrl = frame.url();
+    const frameName = typeof frame.name === 'function' ? frame.name() : '';
+
+    for (const selector of candidateSelectors) {
+      const locator = frame.locator(selector).first();
+      const count = await locator.count().catch(() => 0);
+      if (!count) {
+        frameSummaries.push(`${frameName || 'unnamed'}|${frameUrl || 'about:blank'}|${selector}|count=0`);
+        continue;
+      }
+
+      const visible = await locator.isVisible().catch(() => false);
+      frameSummaries.push(`${frameName || 'unnamed'}|${frameUrl || 'about:blank'}|${selector}|count=${count}|visible=${visible ? 'yes' : 'no'}`);
+      if (!visible) continue;
+
+      const tokenLength = await page.evaluate(() => {
+        const el = document.querySelector('[name="cf-turnstile-response"]');
+        return el ? el.value.length : 0;
+      }).catch(() => 0);
+
+      return { found: true, selector, frameUrl, frameName, tokenLength, frameSummaries };
+    }
+  }
+
+  const tokenLength = await page.evaluate(() => {
+    const el = document.querySelector('[name="cf-turnstile-response"]');
+    return el ? el.value.length : 0;
+  }).catch(() => 0);
+
+  return { found: false, selector: '', frameUrl: '', frameName: '', tokenLength, frameSummaries };
+}
+
+async function tryClickTurnstileCheckbox(page) {
+  const candidateSelectors = [
+    'label.cb-lb',
+    '.cb-c label',
+    '.cb-c',
+    '#content',
+    '#verifying',
+    'div[role="alert"]',
+    'input[type="checkbox"]',
+    '[role="checkbox"]',
+    'label:has-text("Xác minh bạn là con người")',
+    'label:has-text("Verify you are human")',
+    'label:has-text("I am human")'
+  ];
+
+  const tryDispatchInFrame = async (frame) => {
+    return frame.evaluate(() => {
+      const selectors = [
+        'label.cb-lb',
+        '.cb-c label',
+        '.cb-c',
+        '#content',
+        '#verifying',
+        'div[role="alert"]',
+        'input[type="checkbox"]',
+        '[role="checkbox"]'
+      ];
+
+      const findTarget = () => {
+        for (const selector of selectors) {
+          const element = document.querySelector(selector);
+          if (!element) continue;
+          const rect = element.getBoundingClientRect();
+          if (rect.width < 8 || rect.height < 8) continue;
+          return { element, rect };
+        }
+        return null;
+      };
+
+      const target = findTarget();
+      if (!target) return { ok: false, reason: 'target-not-found' };
+
+      const clickX = target.rect.left + Math.min(22, Math.max(10, target.rect.width / 2));
+      const clickY = target.rect.top + Math.min(22, Math.max(10, target.rect.height / 2));
+      const eventInit = { bubbles: true, cancelable: true, composed: true, clientX: clickX, clientY: clickY };
+      const node = document.elementFromPoint(clickX, clickY) || target.element;
+
+      for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+        node.dispatchEvent(new MouseEvent(type, eventInit));
+      }
+
+      if (node instanceof HTMLInputElement && node.type === 'checkbox') {
+        node.checked = true;
+        node.dispatchEvent(new Event('change', { bubbles: true }));
+        node.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      return { ok: true, method: 'frame-dispatch' };
+    }).catch((error) => ({ ok: false, reason: error?.message || String(error) }));
+  };
+
+  const tryClickInFrame = async (frame) => {
+    for (const selector of candidateSelectors) {
+      const locator = frame.locator(selector).first();
+      const count = await locator.count().catch(() => 0);
+      if (!count) continue;
+
+      const visible = await locator.isVisible().catch(() => false);
+      if (!visible) continue;
+
+      const clicked = await locator.click({ timeout: 1_500, force: true }).then(() => ({
+        clicked: true,
+        selector,
+        frameUrl: frame.url(),
+        method: 'locator.click'
+      })).catch(async () => {
+        const dispatched = await tryDispatchInFrame(frame);
+        if (dispatched.ok) {
+          return {
+            clicked: true,
+            selector,
+            frameUrl: frame.url(),
+            method: dispatched.method || 'frame-dispatch'
+          };
+        }
+
+        const box = await locator.boundingBox().catch(() => null);
+        if (box && box.width >= 18 && box.height >= 18) {
+          const targetX = box.x + Math.min(22, Math.max(10, box.width / 2));
+          const targetY = box.y + Math.min(22, Math.max(10, box.height / 2));
+          await page.mouse.move(targetX, targetY).catch(() => { });
+          await page.mouse.click(targetX, targetY, { delay: 80 }).catch(() => { });
+          return {
+            clicked: true,
+            selector,
+            frameUrl: frame.url(),
+            method: 'page.mouse'
+          };
+        }
+
+        return {
+          clicked: false,
+          selector,
+          frameUrl: frame.url(),
+          method: '',
+          error: dispatched.reason || 'all-click-methods-failed'
+        };
+      });
+
+      if (clicked.clicked) return clicked;
+    }
+
+    return {
+      clicked: false,
+      selector: '',
+      frameUrl: frame.url(),
+      method: '',
+      error: ''
+    };
+  };
+
+  const frames = [page.mainFrame(), ...page.frames()];
+  for (const frame of frames) {
+    const clicked = await tryClickInFrame(frame).catch((error) => ({
+      clicked: false,
+      selector: '',
+      frameUrl: frame.url(),
+      method: '',
+      error: error?.message || String(error)
+    }));
+    if (clicked.clicked) return clicked;
+  }
+
+  return {
+    clicked: false,
+    selector: '',
+    frameUrl: '',
+    method: '',
+    error: ''
+  };
 }
 
 async function fillBugsLogin(page, account) {
@@ -1625,115 +1853,10 @@ async function completeFavoriteVote(page, voteState) {
     });
     console.log('[VOTE PROCESS] Đã click nút VOTING (투표하기).');
 
-    console.log('[VOTE PROCESS] Bước 6: Đang chờ website phản hồi kết quả vote qua dialog hoặc popup DOM...');
-    const start = Date.now();
-    let checked = false;
-    let isSuccess = false;
-    let isInsufficientHearts = false;
-    let isLimitExceeded = false;
-    let isLoginRequired = false;
-    let detailMessage = '';
-
-    while (Date.now() - start < 10000) { // Tăng thời gian chờ lên 10 giây để đảm bảo nhận diện tốt
-      // 1. Kiểm tra nếu có dialog thực sự xuất hiện
-      if (voteState.dialogReceived) {
-        detailMessage = voteState.lastDialogMessage || '';
-        console.log(`[VOTE PROCESS] Phản hồi nhận được từ browser dialog: "${detailMessage}"`);
-        
-        isInsufficientHearts = detailMessage.includes('부족') || detailMessage.toLowerCase().includes('insufficient') || detailMessage.toLowerCase().includes('heart') || detailMessage.includes('하트');
-        isLimitExceeded = detailMessage.includes('초과') || detailMessage.includes('이미') || detailMessage.toLowerCase().includes('limit') || detailMessage.toLowerCase().includes('already');
-        isLoginRequired = detailMessage.includes('로그인') || detailMessage.toLowerCase().includes('login') || detailMessage.toLowerCase().includes('session');
-        isSuccess = detailMessage.includes('완료') || detailMessage.includes('참여') || detailMessage.includes('감사') || detailMessage.toLowerCase().includes('success') || detailMessage.toLowerCase().includes('complete') || detailMessage.toLowerCase().includes('thank');
-        
-        checked = true;
-        break;
-      }
-
-      // 2. Kiểm tra các DOM modal popup xuất hiện trực tiếp trên trang (Bugs thường dùng layer/alert modal)
-      const domResult = await page.evaluate(() => {
-        const popupSelectors = [
-          'div[class*="layer"]',
-          'div[class*="popup"]',
-          '.layerWrap',
-          '#layerWrap',
-          '.alert',
-          '.modal',
-          '[role="dialog"]'
-        ];
-
-        for (const selector of popupSelectors) {
-          const nodes = [...document.querySelectorAll(selector)];
-          const visibleNode = nodes.find((node) => {
-            const rect = node.getBoundingClientRect();
-            return rect.width > 40 && rect.height > 40;
-          });
-
-          if (!visibleNode) continue;
-
-          const txt = (visibleNode.textContent || '').trim();
-          if (txt) return txt;
-        }
-
-        const bodyText = (document.body?.innerText || document.body?.textContent || '').replace(/\s+/g, ' ').trim();
-        if (!bodyText) return '';
-
-        if (
-          bodyText.includes('Your vote has been completed') ||
-          bodyText.includes('It takes up to 10 minutes to reflect the vote') ||
-          bodyText.includes('Another vote') ||
-          bodyText.includes('Heart Station') ||
-          /\b\d+\s*vote\(s\)\b/i.test(bodyText)
-        ) {
-          return 'Your vote has been completed';
-        }
-
-        if (bodyText.includes('부족') || bodyText.includes('Insufficient') || bodyText.includes('하트 부족')) {
-          return 'Insufficient hearts';
-        }
-
-        return '';
-      }).catch(() => '');
-
-      if (domResult) {
-        detailMessage = domResult.trim().replace(/\s+/g, ' ');
-        console.log(`[VOTE PROCESS] Phát hiện DOM modal kết quả trên trang: "${detailMessage}"`);
-
-        isInsufficientHearts = detailMessage.includes('부족') || detailMessage.toLowerCase().includes('insufficient') || detailMessage.toLowerCase().includes('heart') || detailMessage.includes('하트');
-        isLimitExceeded = detailMessage.includes('초과') || detailMessage.includes('이미') || detailMessage.toLowerCase().includes('limit') || detailMessage.toLowerCase().includes('already');
-        isLoginRequired = detailMessage.includes('로그인') || detailMessage.toLowerCase().includes('login') || detailMessage.toLowerCase().includes('session');
-        isSuccess = detailMessage.includes('완료') || detailMessage.includes('참여') || detailMessage.includes('감사') || detailMessage.toLowerCase().includes('success') || detailMessage.toLowerCase().includes('complete') || detailMessage.toLowerCase().includes('thank') || detailMessage.toLowerCase().includes('completed');
-
-        checked = true;
-        break;
-      }
-
-      await page.waitForTimeout(300);
-    }
-
-    if (checked) {
-      if (isInsufficientHearts) {
-        console.error(`❌ [VOTE PROCESS] Thất bại: Tài khoản không đủ tim (하트 부족). Chi tiết: "${detailMessage}"`);
-        return false;
-      }
-      if (isLimitExceeded) {
-        console.error(`❌ [VOTE PROCESS] Thất bại: Đã hết lượt vote hôm nay hoặc vượt quá giới hạn (초과 / 이미 참여). Chi tiết: "${detailMessage}"`);
-        return false;
-      }
-      if (isLoginRequired) {
-        console.error(`❌ [VOTE PROCESS] Thất bại: Hết phiên đăng nhập hoặc yêu cầu login. Chi tiết: "${detailMessage}"`);
-        return false;
-      }
-      if (isSuccess) {
-        console.log(`✅ [VOTE PROCESS] Thành công: Đã ghi nhận vote thành công! Chi tiết: "${detailMessage}"`);
-        return true;
-      }
-
-      console.warn(`⚠️ [VOTE PROCESS] Cảnh báo: Nhận phản hồi không rõ từ khóa: "${detailMessage}". Mặc định coi là THẤT BẠI.`);
-      return false;
-    } else {
-      console.warn('⚠️ [VOTE PROCESS] Cảnh báo: Không có dialog hay DOM popup kết quả nào hiển thị từ website sau 10 giây.');
-      return false;
-    }
+    console.log('[VOTE PROCESS] Bước 6: Đã click VOTING. Chờ 5 giây để website xử lý...');
+    await page.waitForTimeout(5_000);
+    console.log('[VOTE PROCESS] Bước 7: Kết thúc bước vote popup sau 5 giây chờ.');
+    return true;
   } catch (error) {
     console.error(`❌ [VOTE PROCESS] Lỗi trong quá trình thực hiện click vote tự động: ${error.message}`);
     return false;
