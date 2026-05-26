@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain, nativeImage, Notification, utilityProcess, dialog, screen, session } = require('electron'); const path = require('node:path');
-const { fork } = require('node:child_process');
+const { fork, execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const execFileAsync = promisify(execFile);
 const fs = require('node:fs/promises');
 const XLSX = require('xlsx');
 
@@ -8,6 +10,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'TianXiweiVoteAssistAp
 let mainWindow;
 const activeWorkers = new Map(); // key: instanceId, value: childProcess
 const stoppingWorkers = new Set(); // key: instanceId, true when user intentionally stops a worker
+const activeAdbDevices = new Map(); // // adbLockKey -> instanceId
 let lastNotificationKey = '';
 let setupPromise = null;
 
@@ -259,7 +262,7 @@ async function ensureInstanceConfig(instanceId, settings) {
   let currentConfig = {};
   try {
     currentConfig = JSON.parse(await fs.readFile(configPath, 'utf8'));
-  } catch {}
+  } catch { }
 
   const nextConfig = {
     freshProfilePerRun: true,
@@ -278,6 +281,221 @@ async function ensureInstanceConfig(instanceId, settings) {
   await fs.writeFile(configPath, JSON.stringify(nextConfig, null, 2));
 }
 //
+//
+function getBundledAdbPath() {
+  const exeName = process.platform === 'win32' ? 'adb.exe' : 'adb';
+  const platformDir = process.platform === 'win32' ? 'win' : 'mac';
+
+  let adbPath = path.join(__dirname, 'assets', 'bin', platformDir, exeName);
+
+  if (adbPath.includes('app.asar')) {
+    adbPath = adbPath.replace('app.asar', 'app.asar.unpacked');
+  }
+
+  return adbPath;
+}
+//
+function isTcpAdbDeviceId(deviceId) {
+  return /^127\.0\.0\.1:\d+$/.test(deviceId);
+}
+
+function isEmulatorAlias(deviceId) {
+  return /^emulator-\d+$/.test(deviceId);
+}
+
+function shouldShowFarmAdbDevice(deviceId) {
+  return isTcpAdbDeviceId(deviceId) || isEmulatorAlias(deviceId);
+}
+
+function preferAdbDeviceId(nextId, currentId) {
+  if (isTcpAdbDeviceId(nextId) && !isTcpAdbDeviceId(currentId)) {
+    return true;
+  }
+
+  return false;
+}
+
+async function getAdbDeviceLockKey(adbPath, deviceId) {
+  try {
+    const { stdout } = await execFileAsync(
+      adbPath,
+      ['-s', deviceId, 'shell', 'settings', 'get', 'secure', 'android_id'],
+      { timeout: 2500 }
+    );
+
+    const androidId = stdout.trim();
+
+    if (androidId && androidId !== 'null') {
+      return `android:${androidId}`;
+    }
+  } catch { }
+
+  try {
+    const { stdout } = await execFileAsync(
+      adbPath,
+      ['-s', deviceId, 'shell', 'getprop', 'ro.serialno'],
+      { timeout: 2500 }
+    );
+
+    const serialNo = stdout.trim();
+
+    if (serialNo && serialNo !== 'unknown') {
+      return `serial:${serialNo}`;
+    }
+  } catch { }
+
+  return `device:${deviceId}`;
+}
+//
+
+//
+function getEmulatorLabel(deviceId) {
+  if (deviceId.includes('62001')) {
+    return `NoxPlayer - ${deviceId}`;
+  }
+
+  if (isTcpAdbDeviceId(deviceId)) {
+    return `BlueStacks / LDPlayer - ${deviceId}`;
+  }
+
+  if (isEmulatorAlias(deviceId)) {
+    return `Android Emulator - ${deviceId}`;
+  }
+
+  return `Android Emulator - ${deviceId}`;
+}
+//
+//
+async function readBlueStacksAdbPorts() {
+  const baseDirs = Array.from(new Set([
+    process.env.ProgramData,
+    'C:\\ProgramData',
+    'D:\\ProgramData',
+    'E:\\ProgramData',
+    'F:\\ProgramData'
+  ].filter(Boolean)));
+
+  const configPaths = [];
+
+  for (const baseDir of baseDirs) {
+    configPaths.push(
+      path.join(baseDir, 'BlueStacks_nxt', 'bluestacks.conf'),
+      path.join(baseDir, 'BlueStacks', 'bluestacks.conf'),
+      path.join(baseDir, 'BlueStacks_msi5', 'bluestacks.conf')
+    );
+  }
+
+  const ports = new Set();
+
+  for (const configPath of configPaths) {
+    try {
+      const content = await fs.readFile(configPath, 'utf8');
+
+      for (const match of content.matchAll(/adb_port\s*=\s*"?(\d+)"?/gi)) {
+        const port = Number(match[1]);
+
+        if (Number.isInteger(port) && port > 0 && port < 65536) {
+          ports.add(port);
+        }
+      }
+    } catch { }
+  }
+
+  return Array.from(ports);
+}
+
+async function getAdbScanPorts() {
+  const blueStacksPorts = await readBlueStacksAdbPorts();
+
+  return Array.from(new Set([
+    ...blueStacksPorts,
+
+    // BlueStacks common ADB ports
+    5555,
+    5575,
+    5595,
+    5615,
+    5635,
+    5655,
+    5675,
+    5695,
+    5605,
+
+    // Android emulator aliases / nearby ports
+    5554,
+    5556,
+    5558,
+    5560,
+    5562,
+    5564,
+
+    // Nox / others
+    62001
+  ]));
+}
+//
+
+async function connectAdbPort(adbPath, port) {
+  try {
+    await execFileAsync(
+      adbPath,
+      ['connect', `127.0.0.1:${port}`],
+      { timeout: 1200 }
+    );
+  } catch { }
+}
+
+async function scanOnlineAdbDevices() {
+  const adbPath = getBundledAdbPath();
+
+  const ports = await getAdbScanPorts();
+
+  await Promise.all(
+    ports.map((port) => connectAdbPort(adbPath, port))
+  );
+
+  const { stdout } = await execFileAsync(adbPath, ['devices']);
+  const lines = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+
+  const devices = lines
+    .slice(1)
+    .map((line) => {
+      const [id, state] = line.split(/\s+/);
+      return { id, state };
+    })
+    .filter((device) => device.state === 'device')
+    .filter((device) => shouldShowFarmAdbDevice(device.id));
+
+  const uniqueDevices = new Map();
+
+  for (const device of devices) {
+    const lockKey = await getAdbDeviceLockKey(adbPath, device.id);
+    const current = uniqueDevices.get(lockKey);
+
+    if (!current || preferAdbDeviceId(device.id, current.id)) {
+      uniqueDevices.set(lockKey, {
+        ...device,
+        lockKey
+      });
+    }
+  }
+
+  return Array.from(uniqueDevices.values()).map((device) => {
+    const usedBy =
+      activeAdbDevices.get(device.lockKey) ||
+      activeAdbDevices.get(device.id) ||
+      '';
+
+    return {
+      id: device.id,
+      lockKey: device.lockKey,
+      label: getEmulatorLabel(device.id),
+      available: !usedBy,
+      usedBy
+    };
+  });
+}
+//
 
 function runSetupWorker(extraEnv = {}) {
   return new Promise((resolve, reject) => {
@@ -293,10 +511,10 @@ function runSetupWorker(extraEnv = {}) {
     child.stdout?.on('data', (data) => {
       const text = data.toString();
       console.log(`[Setup-Worker] ${text.trim()}`);
-      
+
       const progressMatch = text.match(/Download progress:\s*(\d+%\s*\([^)]+\))/i);
       const mirrorMatch = text.match(/Tải qua mirror:\s*(.+)/i);
-      
+
       if (progressMatch) {
         send('setup-status', `progress:${progressMatch[1]}`);
       } else if (mirrorMatch) {
@@ -305,12 +523,12 @@ function runSetupWorker(extraEnv = {}) {
         try {
           const urlObj = new URL(urlStr);
           cleanUrl = urlObj.hostname;
-        } catch {}
+        } catch { }
         send('setup-status', `mirror:${cleanUrl}`);
       } else {
         send('setup-status', 'browserDownloading');
       }
-      
+
       send('worker-log', { instanceId: 'setup', text });
     });
 
@@ -331,7 +549,7 @@ function ensureSetupWorkerReady() {
   if (!setupPromise) {
     setupPromise = (async () => {
       send('setup-status', 'setupCheckingBrowser');
-      
+
       let systemProxy = null;
       try {
         if (session && session.defaultSession) {
@@ -610,6 +828,15 @@ function accountToExportRow(account) {
 
 // --- IPC HANDLERS ---
 
+//
+ipcMain.handle('instances:scan-emulators', async () => {
+  const devices = await scanOnlineAdbDevices();
+
+  return {
+    devices
+  };
+});
+//
 ipcMain.handle('setup:first-run', async () => {
   send('setup-status', 'setupPreparingData');
   await ensureRuntimeDirs();
@@ -753,12 +980,53 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
   let command = 'signup';
   if (mode === 'login') command = 'login';
   else if (mode === 'ads') command = 'ads';
+  const uiMode = mode === 'signup-manual' ? 'signup-manual' : command;
+
+  const adbDeviceId = command === 'ads' ? String(options.emulatorDevice || '').trim() : '';
+  let adbDeviceLocks = [];
+
+  if (command === 'ads' && !adbDeviceId) {
+    return {
+      ok: false,
+      error: 'Chưa chọn giả lập đang online.'
+    };
+  }
+
+  if (command === 'ads') {
+    const adbPath = getBundledAdbPath();
+    const adbDeviceLockKey = await getAdbDeviceLockKey(adbPath, adbDeviceId);
+
+    adbDeviceLocks = Array.from(new Set([
+      adbDeviceId,
+      adbDeviceLockKey
+    ].filter(Boolean)));
+
+    const usedLock = adbDeviceLocks.find((lock) => {
+      const usedBy = activeAdbDevices.get(lock);
+      return usedBy && usedBy !== instanceId;
+    });
+
+    if (usedLock) {
+      return {
+        ok: false,
+        error: `Giả lập ${adbDeviceId} đang được instance khác sử dụng.`
+      };
+    }
+
+    for (const lock of adbDeviceLocks) {
+      activeAdbDevices.set(lock, instanceId);
+    }
+  }
 
   const runnerArgs = [command];
   if (command === 'signup' && options.count) {
     runnerArgs.push(String(options.count));
-  } else if (command === 'ads' && options.emulatorType) {
-    runnerArgs.push(options.emulatorType);
+    if (options.manualCaptcha || mode === 'signup-manual') {
+      runnerArgs.push('manual-captcha');
+    }
+  } else if (command === 'ads') {
+    runnerArgs.push(options.emulatorType || 'adb_device');
+    runnerArgs.push(adbDeviceId);
   }
 
   const instanceDir = getInstanceDir(instanceId);
@@ -773,7 +1041,7 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
     }
   });
 
-  send('run-state', { instanceId, running: true, mode: command });
+  send('run-state', { instanceId, running: true, mode: uiMode });
 
   try {
     await ensureSetupWorkerReady();
@@ -810,14 +1078,24 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
       error: error?.message || String(error)
     };
   } finally {
+    for (const lock of adbDeviceLocks) {
+      activeAdbDevices.delete(lock);
+    }
     activeWorkers.delete(instanceId);
     stoppingWorkers.delete(instanceId);
     send('data-updated', { instanceId });
-    send('run-state', { instanceId, running: false, mode: command });
+    send('run-state', { instanceId, running: false, mode: uiMode });
   }
 });
 
 ipcMain.handle('instances:stop', async (_event, instanceId) => {
+
+  for (const [deviceId, ownerInstanceId] of activeAdbDevices.entries()) {
+    if (ownerInstanceId === instanceId) {
+      activeAdbDevices.delete(deviceId);
+    }
+  }
+
   if (!activeWorkers.has(instanceId)) return false;
   const child = activeWorkers.get(instanceId);
   stoppingWorkers.add(instanceId);

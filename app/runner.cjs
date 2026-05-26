@@ -3,13 +3,14 @@ const { pathToFileURL } = require('node:url');
 
 const command = process.argv[2] || 'signup';
 const param = process.argv[3]; // count for signup, emulatorType for ads
+const extraParam = process.argv[4];
 
 const isAdsMode = command === 'ads';
 const scriptName = isAdsMode ? 'ads-farm.mjs' : 'vote-assist.mjs';
 const scriptPath = path.join(__dirname, '..', 'scripts', scriptName);
 const scriptUrl = pathToFileURL(scriptPath).href;
 
-process.argv = [process.execPath, scriptPath, command, param].filter(Boolean);
+process.argv = [process.execPath, scriptPath, command, param, extraParam].filter(Boolean);
 
 import(scriptUrl).then(() => {
   // Không gọi process.exit(0) ở đây để tránh chấm dứt tiến trình sớm.

@@ -12,6 +12,8 @@ const gapVotes = document.getElementById('gapVotes');
 const updatedAt = document.getElementById('updatedAt');
 const emptyScoreHint = document.getElementById('emptyScoreHint');
 const logOutput = document.getElementById('logOutput');
+const emulatorScanStatus = document.getElementById('emulatorScanStatus');
+const emulatorOptions = document.getElementById('emulatorOptions');
 
 // Dialog & Modal DOMs
 const modal = document.getElementById('modal');
@@ -32,6 +34,7 @@ const closeInstanceFormDialog = document.getElementById('closeInstanceFormDialog
 
 // Action Buttons
 const signupButton = document.getElementById('signupButton');
+const signupManualButton = document.getElementById('signupManualButton');
 const loginButton = document.getElementById('loginButton');
 const adsButton = document.getElementById('adsButton');
 const accountsButton = document.getElementById('accountsButton');
@@ -60,6 +63,7 @@ let instances = [];
 let selectedInstanceId = null;
 const instanceLogs = new Map(); // key: instanceId, value: logText
 let editingInstanceId = null; // null if creating, string id if editing
+let emulatorPickerInstanceId = '';
 
 function t(key) {
   return window.I18N?.[currentLanguage]?.[key] || window.I18N?.en?.[key] || key;
@@ -316,12 +320,16 @@ async function updateSelectedInstanceDashboard(inst) {
   if (inst.running) {
     // Vô hiệu hóa các nút khác, chuyển nút đang chạy thành nút Dừng
     signupButton.disabled = inst.runningMode !== 'signup';
+    signupManualButton.disabled = inst.runningMode !== 'signup-manual';
     loginButton.disabled = inst.runningMode !== 'login';
     adsButton.disabled = inst.runningMode !== 'ads';
 
     if (inst.runningMode === 'signup') {
       signupButton.innerHTML = `<span>${t('stopSignup')}</span><small>${t('stopSignupHint')}</small>`;
       signupButton.classList.add('btnDashboardStop');
+    } else if (inst.runningMode === 'signup-manual') {
+      signupManualButton.innerHTML = `<span>${t('stopSignupManual')}</span><small>${t('stopSignupManualHint')}</small>`;
+      signupManualButton.classList.add('btnDashboardStop');
     } else if (inst.runningMode === 'login') {
       loginButton.innerHTML = `<span>${t('stopLogin')}</span><small>${t('stopLoginHint')}</small>`;
       loginButton.classList.add('btnDashboardStop');
@@ -332,14 +340,17 @@ async function updateSelectedInstanceDashboard(inst) {
   } else {
     // Trở lại trạng thái bình thường
     signupButton.disabled = false;
+    signupManualButton.disabled = false;
     loginButton.disabled = false;
     adsButton.disabled = false;
 
     signupButton.classList.remove('btnDashboardStop');
+    signupManualButton.classList.remove('btnDashboardStop');
     loginButton.classList.remove('btnDashboardStop');
     adsButton.classList.remove('btnDashboardStop');
 
     signupButton.innerHTML = `<span>${t('signup')}</span><small>${t('signupHint')}</small>`;
+    signupManualButton.innerHTML = `<span>${t('signupManual')}</span><small>${t('signupManualHint')}</small>`;
     loginButton.innerHTML = `<span>${t('loginVote')}</span><small>${t('loginVoteHint')}</small>`;
     adsButton.innerHTML = `<span>${t('farmAds')}</span><small>${t('farmAdsHint')}</small>`;
   }
@@ -400,7 +411,7 @@ async function saveInstanceForm() {
 async function startInstanceProcess(instanceId, mode, optionsOverride = null, autoSelect = true) {
   let options = optionsOverride || {};
 
-  if (mode === 'signup' && !optionsOverride) {
+  if ((mode === 'signup' || mode === 'signup-manual') && !optionsOverride) {
     const count = await requestSignupCount();
     if (count === null) return;
     if (!Number.isInteger(count) || count < 1) {
@@ -408,6 +419,10 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
       return;
     }
     options.count = count;
+  }
+
+  if (mode === 'signup-manual') {
+    options.manualCaptcha = true;
   }
 
   // Clear previous log for clean start
@@ -421,6 +436,8 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
     startLogText = t('runningLogin');
   } else if (mode === 'ads') {
     startLogText = t('runningAds');
+  } else if (mode === 'signup-manual') {
+    startLogText = t('runningSignupManual');
   } else {
     startLogText = t('runningSignup');
   }
@@ -465,12 +482,16 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
   appendInstanceLog(instanceId, `[DEBUG UI] selectedInstanceId === instanceId is ${selectedInstanceId === instanceId}\n`);
   if (selectedInstanceId === instanceId) {
     signupButton.disabled = mode !== 'signup';
+    signupManualButton.disabled = mode !== 'signup-manual';
     loginButton.disabled = mode !== 'login';
     adsButton.disabled = mode !== 'ads';
 
     if (mode === 'signup') {
       signupButton.innerHTML = `<span>${t('stopSignup')}</span><small>${t('stopSignupHint')}</small>`;
       signupButton.classList.add('btnDashboardStop');
+    } else if (mode === 'signup-manual') {
+      signupManualButton.innerHTML = `<span>${t('stopSignupManual')}</span><small>${t('stopSignupManualHint')}</small>`;
+      signupManualButton.classList.add('btnDashboardStop');
     } else if (mode === 'login') {
       loginButton.innerHTML = `<span>${t('stopLogin')}</span><small>${t('stopLoginHint')}</small>`;
       loginButton.classList.add('btnDashboardStop');
@@ -783,17 +804,53 @@ function showFarmAdsGuide() {
       <li>${t('farmAdsGuideBluestacksStep3')}</li>
       <li>${t('farmAdsGuideBluestacksStep4')}</li>
       <li>${t('farmAdsGuideBluestacksStep5')}</li>
+      <li>${t('farmAdsGuideBluestacksStep6')}</li>
     </ol>
-    <p><strong>${t('farmAdsGuideLdplayerTitle')}</strong></p>
-    <ol>
-      <li>${t('farmAdsGuideLdplayerStep1')}</li>
-      <li>${t('farmAdsGuideLdplayerStep2')}</li>
-      <li>${t('farmAdsGuideLdplayerStep3')}</li>
-      <li>${t('farmAdsGuideLdplayerStep4')}</li>
-    </ol>
-    <p>${t('farmAdsGuideNote')}</p>
   `);
 }
+//
+async function openEmulatorPicker() {
+  emulatorPickerInstanceId = selectedInstanceId;
+  emulatorOptions.innerHTML = '';
+  emulatorScanStatus.textContent = t('scanningEmulators');
+  confirmEmulatorDialog.disabled = true;
+
+  if (!emulatorDialog.open) {
+    emulatorDialog.showModal();
+  }
+
+  try {
+    const result = await window.txw.scanEmulators();
+    const devices = result.devices || [];
+
+    if (!devices.length) {
+      emulatorScanStatus.textContent = t('noOnlineEmulators');
+      return;
+    }
+
+    emulatorScanStatus.textContent = t('selectOnlineEmulator');
+
+    emulatorOptions.innerHTML = devices.map((device, index) => `
+      <label style="display: flex; align-items: center; gap: 10px; cursor: ${device.available ? 'pointer' : 'not-allowed'}; opacity: ${device.available ? '1' : '0.45'};">
+        <input
+          type="radio"
+          name="emulatorDevice"
+          value="${device.id}"
+          data-emulator-type="${device.id.includes('62001') ? 'nox' : 'adb_device'}"
+          ${device.available ? '' : 'disabled'}
+          ${device.available && index === devices.findIndex((item) => item.available) ? 'checked' : ''}
+          style="width: auto; height: auto;"
+        >
+        <span>${device.label}${device.available ? '' : ` (${t('emulatorInUse')})`}</span>
+      </label>
+    `).join('');
+
+    confirmEmulatorDialog.disabled = !devices.some((device) => device.available);
+  } catch (error) {
+    emulatorScanStatus.textContent = error.message || String(error);
+  }
+}
+//
 
 // Smart logs translator
 function translateWorkerError(errorText) {
@@ -1296,6 +1353,13 @@ signupButton.addEventListener('click', () => {
     startInstanceProcess(selectedInstanceId, 'signup');
   }
 });
+signupManualButton.addEventListener('click', () => {
+  if (signupManualButton.classList.contains('btnDashboardStop')) {
+    window.txw.stopInstance(selectedInstanceId);
+  } else {
+    startInstanceProcess(selectedInstanceId, 'signup-manual');
+  }
+});
 loginButton.addEventListener('click', () => {
   if (loginButton.classList.contains('btnDashboardStop')) {
     window.txw.stopInstance(selectedInstanceId);
@@ -1308,7 +1372,7 @@ adsButton.addEventListener('click', () => {
     window.txw.stopInstance(selectedInstanceId);
   } else {
     if (!selectedInstanceId) return;
-    emulatorDialog.showModal();
+    openEmulatorPicker();
   }
 });
 accountsButton.addEventListener('click', showAccounts);
@@ -1320,10 +1384,23 @@ farmAdsGuideButton?.addEventListener('click', showFarmAdsGuide);
 // Emulator Selection Dialog Events
 closeEmulatorDialog.addEventListener('click', () => emulatorDialog.close());
 confirmEmulatorDialog.addEventListener('click', () => {
-  const selectedRadio = emulatorDialog.querySelector('input[name="emulatorType"]:checked');
-  const emulatorType = selectedRadio ? selectedRadio.value : 'avd_genymotion';
+  const selectedRadio = emulatorDialog.querySelector('input[name="emulatorDevice"]:checked');
+  if (!selectedRadio) return;
+
+  const emulatorDevice = selectedRadio.value;
+  const emulatorType = selectedRadio.dataset.emulatorType || 'adb_device';
+
   emulatorDialog.close();
-  startInstanceProcess(selectedInstanceId, 'ads', { emulatorType });
+  const targetInstanceId = emulatorPickerInstanceId;
+
+  if (!targetInstanceId) return;
+
+  confirmEmulatorDialog.disabled = true;
+
+  startInstanceProcess(targetInstanceId, 'ads', {
+    emulatorType,
+    emulatorDevice
+  });
 });
 
 // Download Excel Template

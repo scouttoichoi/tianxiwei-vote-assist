@@ -629,6 +629,17 @@ button {
   background: #6e52cc;
 }
 
+.actionGroup .primaryAction.manualCaptcha {
+  grid-column: span 2;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.actionGroup .primaryAction.manualCaptcha:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .actionGroup .primaryAction span {
   font-size: 12px;
   font-weight: 800;

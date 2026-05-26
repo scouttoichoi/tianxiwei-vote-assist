@@ -254,6 +254,7 @@ async function handleWelcomePopup() {
 
 async function main() {
   const emulatorType = process.argv[3] || 'avd_genymotion';
+  const preferredDeviceId = process.argv[4] || '';
   console.log(`🚀 KHỞI ĐỘNG TIẾN TRÌNH FARM ADS TỰ ĐỘNG`);
   console.log(`📱 Giả lập lựa chọn: ${emulatorType.toUpperCase()}`);
 
@@ -264,7 +265,7 @@ async function main() {
 
   console.log(`🔍 DEBUG: Bắt đầu setupAdbConnection()...`);
   // 2. Thiết lập kết nối ADB
-  const connected = await setupAdbConnection(emulatorType);
+  const connected = await setupAdbConnection(emulatorType, preferredDeviceId);
   console.log(`🔍 DEBUG: Đã hoàn tất setupAdbConnection(), kết quả: ${connected}`);
   if (!connected) {
     console.error(`❌ LỖI: Không tìm thấy máy ảo nào đang hoạt động. Vui lòng mở giả lập của bạn trước!`);
@@ -352,6 +353,42 @@ async function resolveAdbPath() {
 }
 
 // Chạy lệnh shell adb an toàn
+function isAdbTransportError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return (
+    message.includes('error: closed') ||
+    message.includes('device offline') ||
+    message.includes('device unauthorized') ||
+    message.includes('device not found') ||
+    message.includes('no devices/emulators found') ||
+    message.includes('cannot connect') ||
+    message.includes('connection refused')
+  );
+}
+
+async function reconnectActiveDevice(adbCmd) {
+  if (!activeDeviceId) return false;
+
+  console.log(`🔌 ADB bị ngắt với ${activeDeviceId}. Đang kết nối lại...`);
+
+  await execShellSafe(`${adbCmd} connect ${activeDeviceId}`).catch(() => { });
+  await sleep(1500);
+
+  const devicesOutput = await execShellSafe(`${adbCmd} devices`).catch(() => '');
+  const isOnline = devicesOutput
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => line.startsWith(activeDeviceId) && /\bdevice\b/.test(line));
+
+  if (isOnline) {
+    console.log(`✅ Đã kết nối lại ADB: [${activeDeviceId}]`);
+  } else {
+    console.log(`❌ Không thể kết nối lại ADB: [${activeDeviceId}]`);
+  }
+
+  return isOnline;
+}
+
 async function adbExec(args) {
   const adbCmd = await resolveAdbPath();
   const targetFlag = activeDeviceId ? `-s ${activeDeviceId}` : '';
@@ -359,6 +396,17 @@ async function adbExec(args) {
   try {
     return await execShellSafe(fullCmd);
   } catch (error) {
+    if (activeDeviceId && isAdbTransportError(error)) {
+      const reconnected = await reconnectActiveDevice(adbCmd);
+      if (reconnected) {
+        try {
+          return await execShellSafe(fullCmd);
+        } catch (retryError) {
+          throw new Error(`ADB command failed after reconnect: [${fullCmd}] - ${retryError.message}`);
+        }
+      }
+    }
+
     throw new Error(`ADB command failed: [${fullCmd}] - ${error.message}`);
   }
 }
@@ -380,8 +428,36 @@ function loadInstanceConfig() {
 }
 
 // Thiết lập kết nối ADB dựa trên loại giả lập
-async function setupAdbConnection(emulatorType) {
+async function setupAdbConnection(emulatorType, preferredDeviceId = '') {
   const adbCmd = await resolveAdbPath();
+  //
+  if (preferredDeviceId) {
+    console.log(`🔌 Đang kết nối giả lập đã chọn: ${preferredDeviceId}...`);
+
+    await execShellSafe(`${adbCmd} connect ${preferredDeviceId}`).catch(() => { });
+    await sleep(1000);
+
+    const stdout = await execShellSafe(`${adbCmd} devices`);
+    const online = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .some((line) => line.startsWith(preferredDeviceId) && /\bdevice\b/.test(line));
+
+    if (!online) {
+      console.log(`❌ Giả lập ${preferredDeviceId} không còn online.`);
+      return false;
+    }
+
+    activeDeviceId = preferredDeviceId;
+    console.log(`✅ Kết nối thành công tới máy ảo đã chọn: [${activeDeviceId}]`);
+
+    await adbExec('shell settings put system accelerometer_rotation 0').catch(() => { });
+    await adbExec('shell settings put system user_rotation 0').catch(() => { });
+    await sleep(1500);
+
+    return true;
+  }
+  //
 
   try {
     if (emulatorType === 'ldplayer' || emulatorType === 'bluestacks') {

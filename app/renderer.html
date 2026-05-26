@@ -130,6 +130,10 @@
                 <span data-i18n="loginVote">Vote bằng tài khoản cũ</span>
                 <small data-i18n="loginVoteHint">Chỉ chạy account chưa vote hôm nay</small>
               </button>
+              <button class="primaryAction manualCaptcha" id="signupManualButton">
+                <span data-i18n="signupManual">Đăng ký mới và Vote (tự nhập captcha)</span>
+                <small data-i18n="signupManualHint">Người dùng tự nhập captcha trên Bugs</small>
+              </button>
               <button class="primaryAction tertiary" id="adsButton">
                 <span data-i18n="farmAds">Xem quảng cáo kiếm tim</span>
                 <small data-i18n="farmAdsHint">Tự động chạy máy ảo xem ads 24/7</small>
@@ -137,13 +141,16 @@
             </div>
             <div class="dataGroup">
               <button class="miniButton" id="accountsButton" data-i18n="accounts">Danh sách tài khoản</button>
-              <button class="miniButton" id="importAccountsButton" data-i18n="importAccounts" data-i18n-title="importAccountsHint" title="Import tài khoản Bugs bằng file Excel 3 cột.">
+              <button class="miniButton" id="importAccountsButton" data-i18n="importAccounts"
+                data-i18n-title="importAccountsHint" title="Import tài khoản Bugs bằng file Excel 3 cột.">
                 Import Excel
               </button>
-              <button class="miniButton" id="exportAccountsButton" data-i18n="exportAccounts" data-i18n-title="exportAccountsHint" title="Export tài khoản của instance hiện tại ra Excel.">
+              <button class="miniButton" id="exportAccountsButton" data-i18n="exportAccounts"
+                data-i18n-title="exportAccountsHint" title="Export tài khoản của instance hiện tại ra Excel.">
                 Export Excel
               </button>
-              <button class="miniButton" id="downloadTemplateButton" data-i18n="downloadTemplate" data-i18n-title="downloadTemplateHint" title="Tải file Excel mẫu để nhập tài khoản Bugs.">
+              <button class="miniButton" id="downloadTemplateButton" data-i18n="downloadTemplate"
+                data-i18n-title="downloadTemplateHint" title="Tải file Excel mẫu để nhập tài khoản Bugs.">
                 Tải template
               </button>
               <button class="miniButton dark" id="historyButton" data-i18n="history">Lịch sử điểm vote</button>
@@ -161,7 +168,7 @@
   </main>
 
   <!-- Modals and Dialogs -->
-  
+
   <!-- Info/Table Modal -->
   <dialog id="modal">
     <div class="modalHeader">
@@ -214,27 +221,15 @@
       <button id="closeEmulatorDialog" data-i18n="close">Đóng</button>
     </div>
     <div class="countDialogBody">
-      <p style="margin: 0 0 16px; font-size: 13px; color: rgba(255, 255, 255, 0.7);">
+      <p data-i18n="emulatorPickerHint" style="margin: 0 0 16px; font-size: 13px; color: rgba(255, 255, 255, 0.7);">
         Vui lòng chọn trình giả lập Android bạn đang chạy để tool kết nối ADB chính xác:
       </p>
-      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
-        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-          <input type="radio" name="emulatorType" value="ldplayer" checked style="width: auto; height: auto;">
-          <span data-i18n="ldplayer">LDPlayer (Cổng 5555)</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-          <input type="radio" name="emulatorType" value="nox" style="width: auto; height: auto;">
-          <span data-i18n="nox">NoxPlayer (Cổng 62001)</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-          <input type="radio" name="emulatorType" value="bluestacks" style="width: auto; height: auto;">
-          <span data-i18n="bluestacks">BlueStacks 5 (Cổng 5555)</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-          <input type="radio" name="emulatorType" value="avd_genymotion" style="width: auto; height: auto;">
-          <span data-i18n="avdGenymotion">Android Studio / Genymotion</span>
-        </label>
-      </div>
+      <p id="emulatorScanStatus" data-i18n="scanningEmulators"
+        style="margin: 0 0 12px; font-size: 13px; color: rgba(255, 255, 255, 0.7);">
+        Đang quét giả lập...
+      </p>
+
+      <div id="emulatorOptions" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;"></div>
       <div class="countDialogActions">
         <button id="confirmEmulatorDialog" data-i18n="start">Bắt đầu</button>
       </div>

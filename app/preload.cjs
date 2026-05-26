@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('txw', {
   exportInstanceAccounts: (id) => ipcRenderer.invoke('instances:export-accounts', id),
   markInstanceAccountVoted: (id, email) => ipcRenderer.invoke('instances:mark-voted', id, email),
   toggleInstanceAccountStatus: (id, email, status) => ipcRenderer.invoke('instances:toggle-account-status', id, email, status),
+  scanEmulators: () => ipcRenderer.invoke('instances:scan-emulators'),
   
   // Shared Utilities
   downloadTemplate: (language) => ipcRenderer.invoke('instances:download-template', language),

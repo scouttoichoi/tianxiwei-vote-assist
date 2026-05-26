@@ -25,3 +25,5 @@ vote-assist.config.json
 Thumbs.db
 .vscode/
 __MACOSX/
+
+scripts/solve_captcha.exe

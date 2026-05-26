@@ -8,8 +8,10 @@ window.I18N = {
     top1: 'Top 1',
     gap: 'Chênh lệch',
     updatedAt: 'Cập nhật gần nhất',
-    signup: 'Đăng ký mới và Vote',
+    signup: 'Đăng ký mới và Vote (tự động)',
     signupHint: 'Chạy liên tục đến khi bấm Dừng',
+    signupManual: 'Đăng ký mới và Vote (tự nhập captcha)',
+    signupManualHint: 'Tự nhập captcha trên Bugs',
     loginVote: 'Vote bằng tài khoản cũ',
     loginVoteHint: 'Chỉ chạy account chưa vote hôm nay',
     accounts: 'Danh sách tài khoản',
@@ -18,6 +20,7 @@ window.I18N = {
 
     idleLog: 'Chưa có tiến trình đang chạy.',
     runningSignup: 'Đang chạy đăng ký mới và vote...',
+    runningSignupManual: 'Đang chạy đăng ký mới và vote, chờ bạn nhập captcha...',
     runningLogin: 'Đang chạy vote bằng tài khoản cũ...',
 
     historyTitle: 'Lịch sử vote',
@@ -61,20 +64,15 @@ window.I18N = {
     helpNoteBody: 'Công cụ dùng mail tạm để đăng ký số lượng lớn nên không đảm bảo 100% sẽ nhận được email xác thực. Nếu quá thời gian chờ mà không thấy email, công cụ sẽ bỏ qua lượt hiện tại và chuyển sang lượt tiếp theo.',
     farmAdsGuide: 'Hướng dẫn farm ADS',
     farmAdsGuideTitle: 'Hướng dẫn Farm ADS',
-    farmAdsGuideIntro: 'Tính năng Farm ADS hiện hỗ trợ BlueStacks và LDPlayer. Trước khi chạy, hãy mở giả lập, cài đủ ứng dụng cần thiết và cấu hình đúng độ phân giải để thao tác ADB ổn định.',
+    farmAdsGuideIntro: 'Tính năng Farm ADS hiện hỗ trợ BlueStacks. Trước khi chạy, hãy mở giả lập, cài đủ ứng dụng cần thiết và cấu hình đúng độ phân giải để thao tác ADB ổn định.',
     farmAdsGuideBluestacksTitle: 'Thiết lập BlueStacks',
     farmAdsGuideBluestacksStep1: 'Tải và cài đặt BlueStacks trên máy tính.',
-    farmAdsGuideBluestacksStep2: 'Mở Settings, vào Advanced và bật đủ 3 tùy chọn trong mục này.',
+    farmAdsGuideBluestacksStep2: 'Mở Settings, vào Advanced và bật đầy đủ 3 tùy chọn trong mục này.',
     farmAdsGuideBluestacksStep3: 'Vào Display, đặt độ phân giải 2560 x 1440 và DPI là 320.',
     farmAdsGuideBluestacksStep4: 'Trong BlueStacks, cài ứng dụng 1.1.1.1 và ứng dụng 벅스 - Bugs.',
-    farmAdsGuideBluestacksStep5: 'Sau khi cài xong, mở BlueStacks, quay lại Vote Assist và bấm Xem quảng cáo kiếm tim.',
-    farmAdsGuideLdplayerTitle: 'Thiết lập LDPlayer',
-    farmAdsGuideLdplayerStep1: 'Tải và cài đặt LDPlayer trên máy tính.',
-    farmAdsGuideLdplayerStep2: 'Bấm Settings, vào mục Khác, tại Debug ADB chọn Bật kết nối local rồi lưu lại.',
-    farmAdsGuideLdplayerStep3: 'Vào Hiển thị, chọn Tùy chỉnh, đặt Ngang 2560, Dọc 1440 và DPI 320 rồi lưu lại.',
-    farmAdsGuideLdplayerStep4: 'Sau khi lưu toàn bộ settings, mở giả lập, quay lại Vote Assist và bấm Xem quảng cáo kiếm tim.',
-    farmAdsGuideNote: 'Nếu tool không điều khiển được giả lập, hãy kiểm tra lại ADB/local connection, độ phân giải và đảm bảo app Bugs cùng 1.1.1.1 đã được cài trong đúng giả lập đang chạy.',
-
+    farmAdsGuideBluestacksStep5: 'Mở Multi-instance Manager, chọn Instance, chọn Clone Instance và clone từ phiên bản BlueStacks đã cấu hình đầy đủ ở các bước trên.',
+    farmAdsGuideBluestacksStep6: 'Khởi động từng BlueStacks instance. Khi instance đã vào màn hình chính, mở Vote Assist và bấm Xem quảng cáo kiếm tim.',
+    farmAdsGuideNote: 'Lưu ý: Số lượng instance có thể chạy cùng lúc phụ thuộc vào cấu hình máy. Máy mạnh có thể chạy nhiều instance hơn. Nếu chưa thấy đủ instance trong danh sách chọn giả lập, hãy chờ BlueStacks khởi động hoàn tất rồi bấm quét lại. Không chọn port đang được instance khác sử dụng.',
     browserReady: 'Trình duyệt đã sẵn sàng.',
     workerSignupStarted: 'Bắt đầu signup-vote lượt {current}/{total}',
     workerNoProxy: 'Lượt này không dùng proxy riêng.',
@@ -187,10 +185,16 @@ window.I18N = {
     ldplayer: 'LDPlayer (Cổng 5555)',
     nox: 'NoxPlayer (Cổng 62001)',
     bluestacks: 'BlueStacks 5 (Cổng 5555)',
-    
+    scanningEmulators: 'Đang quét giả lập đang online...',
+    noOnlineEmulators: 'Không tìm thấy giả lập nào đang online. Hãy mở giả lập và bật ADB/local connection.',
+    selectOnlineEmulator: 'Chọn một giả lập đang online để chạy Farm ADS.',
+    emulatorInUse: 'đang được instance khác sử dụng',
+
     // Dynamic execution stop texts
     stopSignup: '⏹ DỪNG ĐĂNG KÝ VÀ VOTE',
     stopSignupHint: 'Bấm để dừng tiến trình ngay lập tức',
+    stopSignupManual: '⏹ DỪNG ĐĂNG KÝ THỦ CÔNG',
+    stopSignupManualHint: 'Dừng luồng tự nhập captcha',
     stopLogin: '⏹ DỪNG VOTE TÀI KHOẢN CŨ',
     stopLoginHint: 'Bấm để dừng tiến trình ngay lập tức',
     stopAds: '⏹ DỪNG FARM ADS MÁY ẢO',
@@ -259,7 +263,11 @@ window.I18N = {
     adsFarmPopupNotDetected: 'ℹ️ Không phát hiện popup trang chủ Bugs sau 6 lần quét.',
     adsFarmNoAccounts: '😴 Không tìm thấy tài khoản nào trong dữ liệu. Chờ 1 phút rồi kiểm tra lại...',
     adsFarmCooldown: '⏳ Tất cả tài khoản đã xem Ads. Nghỉ ngơi tạm dừng {minutes} phút để chờ cooldown...',
-    adsFarmNewCycle: '🔑 BẮT ĐẦU CHU KỲ MỚI CHO: [{email}]'
+    adsFarmNewCycle: '🔑 BẮT ĐẦU CHU KỲ MỚI CHO: [{email}]',
+
+    emulatorPickerHint: 'Vui lòng chọn trình giả lập Android đang online để tool kết nối ADB chính xác.',
+
+    appTitle: 'Tian Xiwei Vote Assist',
   },
 
   zh: {
@@ -271,8 +279,10 @@ window.I18N = {
     top1: '第一名',
     gap: '差距',
     updatedAt: '最近更新',
-    signup: '注册新账号并投票',
+    signup: '注册新账号并投票 (自动)',
     signupHint: '会持续运行，直到点击停止',
+    signupManual: '注册新账号并投票（手动输入验证码）',
+    signupManualHint: '在 Bugs 页面手动输入验证码',
     loginVote: '使用已有账号投票',
     loginVoteHint: '只运行今天还未投票的账号',
     accounts: '账号列表',
@@ -281,6 +291,7 @@ window.I18N = {
 
     idleLog: '当前没有正在运行的任务。',
     runningSignup: '正在注册新账号并投票...',
+    runningSignupManual: '正在注册新账号并投票，请手动输入验证码...',
     runningLogin: '正在使用已有账号投票...',
 
     historyTitle: '投票记录',
@@ -395,20 +406,15 @@ window.I18N = {
 
     farmAdsGuide: '广告刷心教程',
     farmAdsGuideTitle: 'Farm ADS 使用指南',
-    farmAdsGuideIntro: 'Farm ADS 目前支持 BlueStacks 和 LDPlayer。运行前请先打开模拟器，安装必要应用，并设置正确分辨率，确保 ADB 操作稳定。',
+    farmAdsGuideIntro: 'Farm ADS 目前支持 BlueStacks。运行前，请先打开模拟器，安装所需应用，并正确设置分辨率，以保证 ADB 操作稳定。',
     farmAdsGuideBluestacksTitle: 'BlueStacks 设置',
-    farmAdsGuideBluestacksStep1: '下载并安装 BlueStacks。',
-    farmAdsGuideBluestacksStep2: '打开 Settings，进入 Advanced，并启用其中的 3 个选项。',
+    farmAdsGuideBluestacksStep1: '在电脑上下载并安装 BlueStacks。',
+    farmAdsGuideBluestacksStep2: '打开 Settings，进入 Advanced，并启用该页面中的 3 个选项。',
     farmAdsGuideBluestacksStep3: '进入 Display，将分辨率设置为 2560 x 1440，DPI 设置为 320。',
     farmAdsGuideBluestacksStep4: '在 BlueStacks 中安装 1.1.1.1 和 벅스 - Bugs 应用。',
-    farmAdsGuideBluestacksStep5: '全部安装完成后，保持 BlueStacks 打开，回到 Vote Assist 点击“看广告赚心”。',
-    farmAdsGuideLdplayerTitle: 'LDPlayer 设置',
-    farmAdsGuideLdplayerStep1: '下载并安装 LDPlayer。',
-    farmAdsGuideLdplayerStep2: '点击 Settings，进入“其他”，在 Debug ADB 中选择“开启本地连接”，然后保存。',
-    farmAdsGuideLdplayerStep3: '进入“显示”，选择自定义，设置宽 2560、高 1440、DPI 320，然后保存。',
-    farmAdsGuideLdplayerStep4: '保存所有设置后，打开模拟器，回到 Vote Assist 点击“看广告赚心”。',
-    farmAdsGuideNote: '如果工具无法控制模拟器，请检查 ADB/本地连接、分辨率设置，并确认 Bugs 与 1.1.1.1 已安装在当前运行的模拟器中。',
-
+    farmAdsGuideBluestacksStep5: '打开 Multi-instance Manager，选择 Instance，再选择 Clone Instance，并从已完成设置的 BlueStacks 实例进行克隆。',
+    farmAdsGuideBluestacksStep6: '逐个启动 BlueStacks 实例。实例进入主界面后，回到 Vote Assist，点击观看广告获取爱心。',
+    farmAdsGuideNote: '注意：可同时运行的实例数量取决于电脑配置。配置越高，可以同时运行更多实例。如果列表中没有显示全部实例，请等待 BlueStacks 完全启动后重新扫描。不要选择已被其他实例使用的端口。',
     downloadTemplate: '下载模板',
     downloadTemplateHint: '下载包含 user、pass、voted_today 的 Excel 模板。',
     downloadTemplateDoneTitle: '模板已创建',
@@ -451,10 +457,16 @@ window.I18N = {
     ldplayer: 'LDPlayer (端口 5555)',
     nox: 'NoxPlayer (端口 62001)',
     bluestacks: 'BlueStacks 5 (端口 5555)',
-    
+    scanningEmulators: '正在扫描在线模拟器...',
+    noOnlineEmulators: '未找到在线模拟器。请打开模拟器并启用 ADB/本地连接。',
+    selectOnlineEmulator: '请选择一个在线模拟器来运行 Farm ADS。',
+    emulatorInUse: '已被其他实例使用',
+
     // Dynamic execution stop texts
     stopSignup: '⏹ 停止注册投票',
     stopSignupHint: '点击立即停止进程',
+    stopSignupManual: '⏹ 停止手动注册',
+    stopSignupManualHint: '停止手动验证码流程',
     stopLogin: '⏹ 停止已有账号投票',
     stopLoginHint: '点击立即停止进程',
     stopAds: '⏹ 停止看广告赚心',
@@ -523,7 +535,9 @@ window.I18N = {
     adsFarmPopupNotDetected: 'ℹ️ 6次扫描后未检测到 Bugs 主页弹窗。',
     adsFarmNoAccounts: '😴 数据库中未找到任何账号。等待 1 分钟后重试...',
     adsFarmCooldown: '⏳ 所有账号均已观看广告。暂停运行 {minutes} 分钟以等待冷却时间...',
-    adsFarmNewCycle: '🔑 开始新的循环流程，账号: [{email}]'
+    adsFarmNewCycle: '🔑 开始新的循环流程，账号: [{email}]',
+    emulatorPickerHint: '请选择当前在线的 Android 模拟器，以便工具正确连接 ADB。',
+    appTitle: 'Tian Xiwei Vote Assist',
   },
 
   ko: {
@@ -535,8 +549,10 @@ window.I18N = {
     top1: '1위',
     gap: '차이',
     updatedAt: '최근 업데이트',
-    signup: '새 계정 가입 및 투표',
+    signup: '새 계정 가입 및 투표 (자동)',
     signupHint: '중지를 누를 때까지 계속 실행됩니다',
+    signupManual: '새 계정 가입 및 투표 (captcha 직접 입력)',
+    signupManualHint: 'Bugs 페이지에서 captcha를 직접 입력',
     loginVote: '기존 계정으로 투표',
     loginVoteHint: '오늘 아직 투표하지 않은 계정만 실행',
     accounts: '계정 목록',
@@ -545,6 +561,7 @@ window.I18N = {
 
     idleLog: '실행 중인 작업이 없습니다.',
     runningSignup: '새 계정 가입 및 투표를 실행 중...',
+    runningSignupManual: '새 계정 가입 및 투표 실행 중, captcha 직접 입력 대기...',
     runningLogin: '기존 계정으로 투표 실행 중...',
 
     historyTitle: '투표 기록',
@@ -658,21 +675,16 @@ window.I18N = {
     exportCancelled: '내보내기가 취소되었습니다.',
 
     farmAdsGuide: 'Farm ADS 안내',
-    farmAdsGuideTitle: 'Farm ADS 설정 안내',
-    farmAdsGuideIntro: 'Farm ADS는 현재 BlueStacks와 LDPlayer를 지원합니다. 실행 전에 에뮬레이터를 열고 필요한 앱을 설치한 뒤, ADB 조작이 안정적으로 동작하도록 해상도를 정확히 설정하세요.',
+    farmAdsGuideTitle: 'Farm ADS 사용 안내',
+    farmAdsGuideIntro: 'Farm ADS 기능은 현재 BlueStacks를 지원합니다. 실행하기 전에 에뮬레이터를 열고 필요한 앱을 설치한 뒤, ADB 동작이 안정적이도록 해상도를 올바르게 설정해 주세요.',
     farmAdsGuideBluestacksTitle: 'BlueStacks 설정',
-    farmAdsGuideBluestacksStep1: 'BlueStacks를 다운로드하고 설치합니다.',
+    farmAdsGuideBluestacksStep1: '컴퓨터에 BlueStacks를 다운로드하고 설치합니다.',
     farmAdsGuideBluestacksStep2: 'Settings를 열고 Advanced로 이동한 뒤, 해당 항목의 3가지 옵션을 모두 활성화합니다.',
-    farmAdsGuideBluestacksStep3: 'Display로 이동해 해상도를 2560 x 1440, DPI를 320으로 설정합니다.',
-    farmAdsGuideBluestacksStep4: 'BlueStacks 안에 1.1.1.1 앱과 벅스 - Bugs 앱을 설치합니다.',
-    farmAdsGuideBluestacksStep5: '설치가 끝나면 BlueStacks를 켜 둔 상태에서 Vote Assist로 돌아와 광고 시청으로 하트 얻기를 누릅니다.',
-    farmAdsGuideLdplayerTitle: 'LDPlayer 설정',
-    farmAdsGuideLdplayerStep1: 'LDPlayer를 다운로드하고 설치합니다.',
-    farmAdsGuideLdplayerStep2: 'Settings를 누르고 기타 메뉴로 이동한 뒤, Debug ADB에서 로컬 연결 사용을 선택하고 저장합니다.',
-    farmAdsGuideLdplayerStep3: '디스플레이로 이동해 사용자 지정으로 가로 2560, 세로 1440, DPI 320을 설정한 뒤 저장합니다.',
-    farmAdsGuideLdplayerStep4: '모든 설정을 저장한 후 에뮬레이터를 열고 Vote Assist로 돌아와 광고 시청으로 하트 얻기를 누릅니다.',
-    farmAdsGuideNote: '도구가 에뮬레이터를 제어하지 못하면 ADB/로컬 연결, 해상도 설정, 그리고 Bugs와 1.1.1.1 앱이 현재 실행 중인 에뮬레이터에 설치되어 있는지 확인하세요.',
-
+    farmAdsGuideBluestacksStep3: 'Display로 이동하여 해상도를 2560 x 1440, DPI를 320으로 설정합니다.',
+    farmAdsGuideBluestacksStep4: 'BlueStacks 안에서 1.1.1.1 앱과 벅스 - Bugs 앱을 설치합니다.',
+    farmAdsGuideBluestacksStep5: 'Multi-instance Manager를 열고 Instance, Clone Instance를 선택한 뒤, 위 설정을 완료한 BlueStacks 인스턴스를 복제합니다.',
+    farmAdsGuideBluestacksStep6: '각 BlueStacks 인스턴스를 하나씩 실행합니다. 인스턴스가 메인 화면까지 열린 뒤 Vote Assist에서 광고 시청으로 하트 얻기를 누릅니다.',
+    farmAdsGuideNote: '참고: 동시에 실행할 수 있는 인스턴스 수는 컴퓨터 사양에 따라 달라집니다. 성능이 좋은 컴퓨터일수록 더 많은 인스턴스를 실행할 수 있습니다. 선택 목록에 모든 인스턴스가 보이지 않으면 BlueStacks가 완전히 실행될 때까지 기다린 뒤 다시 스캔하세요. 다른 인스턴스가 사용 중인 포트는 선택하지 마세요.',
     downloadTemplate: '템플릿 다운로드',
     downloadTemplateHint: 'user, pass, voted_today 열이 있는 Excel 템플릿을 다운로드합니다.',
     downloadTemplateDoneTitle: '템플릿 생성 완료',
@@ -715,10 +727,16 @@ window.I18N = {
     ldplayer: 'LDPlayer (포트 5555)',
     nox: 'NoxPlayer (포트 62001)',
     bluestacks: 'BlueStacks 5 (포트 5555)',
-    
+    scanningEmulators: '온라인 에뮬레이터를 검색하는 중...',
+    noOnlineEmulators: '온라인 에뮬레이터를 찾지 못했습니다. 에뮬레이터를 열고 ADB/로컬 연결을 활성화하세요.',
+    selectOnlineEmulator: 'Farm ADS를 실행할 온라인 에뮬레이터를 선택하세요.',
+    emulatorInUse: '다른 인스턴스에서 사용 중',
+
     // Dynamic execution stop texts
     stopSignup: '⏹ 가입 및 투표 중지',
     stopSignupHint: '프로세스를 즉시 중지하려면 클릭',
+    stopSignupManual: '⏹ 수동 가입 중지',
+    stopSignupManualHint: 'captcha 직접 입력 흐름 중지',
     stopLogin: '⏹ 기존 계정 투표 중지',
     stopLoginHint: '프로세스를 즉시 중지하려면 클릭',
     stopAds: '⏹ 광고 파밍 중지',
@@ -787,7 +805,10 @@ window.I18N = {
     adsFarmPopupNotDetected: 'ℹ️ 6회 스캔 후 Bugs 메인 홈 팝업이 감지되지 않았습니다.',
     adsFarmNoAccounts: '😴 데이터에서 계정을 찾을 수 없습니다. 1분 대기 후 다시 시도합니다...',
     adsFarmCooldown: '⏳ 모든 계정이 광고를 시청했습니다. 쿨타임을 위해 {minutes}분 동안 일시 정지합니다...',
-    adsFarmNewCycle: '🔑 새 주기 시작, 계정: [{email}]'
+    adsFarmNewCycle: '🔑 새 주기 시작, 계정: [{email}]',
+    emulatorPickerHint: '도구가 ADB에 정확히 연결할 수 있도록 현재 온라인 상태인 Android 에뮬레이터를 선택하세요.',
+
+    appTitle: 'Tian Xiwei Vote Assist',
   },
 
   en: {
@@ -799,8 +820,10 @@ window.I18N = {
     top1: 'Top 1',
     gap: 'Gap',
     updatedAt: 'Last Updated',
-    signup: 'Create Account & Vote',
+    signup: 'Create Account & Vote (Automatic)',
     signupHint: 'Runs until you press Stop',
+    signupManual: 'Create Account & Vote (manual captcha)',
+    signupManualHint: 'Enter captcha manually on Bugs',
     loginVote: 'Vote with Existing Accounts',
     loginVoteHint: 'Only accounts that have not voted today',
     accounts: 'Accounts',
@@ -809,6 +832,7 @@ window.I18N = {
 
     idleLog: 'No process is running.',
     runningSignup: 'Running account signup and vote...',
+    runningSignupManual: 'Running signup and vote, waiting for manual captcha...',
     runningLogin: 'Running vote with existing accounts...',
 
     historyTitle: 'Vote History',
@@ -852,20 +876,15 @@ window.I18N = {
     helpNoteBody: 'The tool uses temporary email services for repeated signup, so verification email delivery is not guaranteed. If no email arrives before the timeout, the tool skips the current run and continues to the next one.',
     farmAdsGuide: 'Farm ADS Guide',
     farmAdsGuideTitle: 'Farm ADS Guide',
-    farmAdsGuideIntro: 'Farm ADS currently supports BlueStacks and LDPlayer. Before running it, open the emulator, install the required apps, and set the correct resolution so ADB automation stays stable.',
+    farmAdsGuideIntro: 'Farm ADS currently supports BlueStacks. Before running it, open the emulator, install the required apps, and set the correct resolution so ADB actions remain stable.',
     farmAdsGuideBluestacksTitle: 'BlueStacks Setup',
     farmAdsGuideBluestacksStep1: 'Download and install BlueStacks on your computer.',
     farmAdsGuideBluestacksStep2: 'Open Settings, go to Advanced, and enable all 3 options in that section.',
-    farmAdsGuideBluestacksStep3: 'Go to Display, set the resolution to 2560 x 1440 and DPI to 320.',
+    farmAdsGuideBluestacksStep3: 'Go to Display, set the resolution to 2560 x 1440, and set DPI to 320.',
     farmAdsGuideBluestacksStep4: 'Inside BlueStacks, install the 1.1.1.1 app and the 벅스 - Bugs app.',
-    farmAdsGuideBluestacksStep5: 'After setup is complete, keep BlueStacks open, return to Vote Assist, and click Watch Ads to Earn Hearts.',
-    farmAdsGuideLdplayerTitle: 'LDPlayer Setup',
-    farmAdsGuideLdplayerStep1: 'Download and install LDPlayer on your computer.',
-    farmAdsGuideLdplayerStep2: 'Open Settings, go to Other, set Debug ADB to Enable local connection, then save.',
-    farmAdsGuideLdplayerStep3: 'Go to Display, choose Custom, set width to 2560, height to 1440, DPI to 320, then save.',
-    farmAdsGuideLdplayerStep4: 'After saving all settings, open the emulator, return to Vote Assist, and click Watch Ads to Earn Hearts.',
-    farmAdsGuideNote: 'If the tool cannot control the emulator, check ADB/local connection, the resolution settings, and make sure Bugs plus 1.1.1.1 are installed in the emulator currently running.',
-
+    farmAdsGuideBluestacksStep5: 'Open Multi-instance Manager, choose Instance, then Clone Instance, and clone from the BlueStacks instance that you already configured.',
+    farmAdsGuideBluestacksStep6: 'Start each BlueStacks instance. Once the instance reaches the home screen, return to Vote Assist and click Watch ads to earn hearts.',
+    farmAdsGuideNote: 'Note: The number of instances you can run at the same time depends on your computer specs. More powerful machines can run more instances. If not all instances appear in the emulator list, wait until BlueStacks has fully started, then scan again. Do not select a port that is already being used by another instance.',
     browserReady: 'Browser is ready.',
     workerSignupStarted: 'Starting signup-vote run {current}/{total}',
     workerNoProxy: 'This run is not using a separate proxy.',
@@ -978,10 +997,16 @@ window.I18N = {
     ldplayer: 'LDPlayer (Port 5555)',
     nox: 'NoxPlayer (Port 62001)',
     bluestacks: 'BlueStacks 5 (Port 5555)',
-    
+    scanningEmulators: 'Scanning online emulators...',
+    noOnlineEmulators: 'No online emulator found. Please open an emulator and enable ADB/local connection.',
+    selectOnlineEmulator: 'Select an online emulator to run Farm ADS.',
+    emulatorInUse: 'already used by another instance',
+
     // Dynamic execution stop texts
     stopSignup: '⏹ STOP SIGNUP & VOTE',
     stopSignupHint: 'Click to stop process immediately',
+    stopSignupManual: '⏹ STOP MANUAL SIGNUP',
+    stopSignupManualHint: 'Stop the manual captcha flow',
     stopLogin: '⏹ STOP EXISTING ACCOUNTS VOTE',
     stopLoginHint: 'Click to stop process immediately',
     stopAds: '⏹ STOP FARMING ADS',
@@ -1050,6 +1075,8 @@ window.I18N = {
     adsFarmPopupNotDetected: 'ℹ️ No Bugs home popup detected after 6 scans.',
     adsFarmNoAccounts: '😴 No accounts found in data. Waiting 1 minute to check again...',
     adsFarmCooldown: '⏳ All accounts have watched Ads. Cooldown pause of {minutes} minutes...',
-    adsFarmNewCycle: '🔑 STARTING NEW CYCLE FOR: [{email}]'
+    adsFarmNewCycle: '🔑 STARTING NEW CYCLE FOR: [{email}]',
+    emulatorPickerHint: 'Please select the online Android emulator so the tool can connect to ADB correctly.',
+    appTitle: 'Tian Xiwei Vote Assist',
   }
 };

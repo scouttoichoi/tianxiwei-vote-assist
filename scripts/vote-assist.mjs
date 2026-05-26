@@ -6,6 +6,13 @@ import process from 'node:process';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import Tesseract from 'tesseract.js';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+const execAsync = promisify(exec);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const TEMP_MAIL_URL = 'https://temp-mail.io/en';
 const BLOCKED_TEMP_MAIL_DOMAINS = new Set(['gmeenramy.com']);
@@ -91,6 +98,26 @@ const BUGS_VOTE_TIMEZONE = 'Asia/Seoul';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function cleanupCaptchaImages() {
+  const logsDir = path.resolve('logs');
+
+  try {
+    const files = await fs.readdir(logsDir).catch(() => []);
+
+    for (const file of files) {
+      const isCaptchaImage =
+        /^captcha_current_\d+\.png$/i.test(file) ||
+        /^ocr-section-.*\.png$/i.test(file);
+
+      if (isCaptchaImage) {
+        await fs.rm(path.join(logsDir, file), { force: true });
+      }
+    }
+  } catch {
+    // Ignore cleanup errors because this should not block the vote flow.
+  }
+}
+
 async function main() {
   const command = process.argv[2] ?? 'signup';
   const config = await loadConfig();
@@ -106,23 +133,17 @@ async function main() {
 }
 
 async function runSignupCommand(config) {
-  // Dọn dẹp các tệp ảnh OCR cũ còn sót lại trong logs trước khi bắt đầu tiến trình
-  try {
-    const files = await fs.readdir('logs').catch(() => []);
-    for (const file of files) {
-      if (file.startsWith('ocr-section-') && file.endsWith('.png')) {
-        await fs.rm(path.join('logs', file), { force: true });
-      }
-    }
-  } catch (err) { }
+  await cleanupCaptchaImages();
 
   const totalRuns = Number(process.argv[3] ?? config.signupRuns ?? 1);
+  const manualCaptcha = process.argv[4] === 'manual-captcha';
   const browserApi = await loadBrowserApi();
   let completed = 0;
 
   for (let runIndex = 1; runIndex <= totalRuns; runIndex += 1) {
+    await cleanupCaptchaImages();
     console.log(`\nBắt đầu signup-vote lượt ${runIndex}/${totalRuns}`);
-    const ok = await runSingleSignupAndVote(browserApi, config).catch(async (error) => {
+    const ok = await runSingleSignupAndVote(browserApi, config, { manualCaptcha }).catch(async (error) => {
       console.warn(`Lỗi signup-vote lượt ${runIndex}: ${error.message}`);
       await appendLog({ status: 'signup-failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => { });
       return false;
@@ -133,7 +154,7 @@ async function runSignupCommand(config) {
   console.log(`Hoàn tất signup-vote: ${completed}/${totalRuns} lượt.`);
 }
 
-async function runSingleSignupAndVote(browserApi, config) {
+async function runSingleSignupAndVote(browserApi, config, options = {}) {
   if (config.freshProfilePerRun ?? true) {
     await fs.rm(USER_DATA_DIR, { recursive: true, force: true });
   }
@@ -172,16 +193,138 @@ async function runSingleSignupAndVote(browserApi, config) {
     await signupPage.goto(BUGS_SIGNUP_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
     await fillBugsSignup(signupPage, state);
 
-    console.log('\nĐã điền form Bugs. Đang tự động focus vào ô nhập mã Captcha...');
-    await signupPage.locator('#captchaText').focus().catch(() => { });
-    await signupPage.locator('#captchaText').scrollIntoViewIfNeeded().catch(() => { });
+    // console.log('\nĐã điền form Bugs. Đang mở ảnh Captcha ở tab riêng để bạn đọc dễ hơn...');
+    // await openCaptchaImageTab(context, signupPage);
 
-    console.log('✍️ Vui lòng tự nhập mã Captcha trên màn hình trình duyệt và bấm nút Sign Up (#btnJoinComplete) để tiếp tục.');
+    // console.log('✍️ Captcha đang được mở ở tab riêng. Hãy đọc mã, tự quay lại tab Sign Up, nhập Captcha và bấm Sign Up.');
 
-    const registered = await waitForRegistrationSuccess(signupPage);
-    if (!registered) {
-      await waitEnter('Chưa phát hiện đăng ký thành công. Nhấn Enter sau khi bạn thấy trang báo đã gửi email xác thực...');
+    // const registered = await waitForRegistrationSuccess(signupPage);
+    // if (!registered) {
+    //   await waitEnter('Chưa phát hiện đăng ký thành công. Nhấn Enter sau khi bạn thấy trang báo đã gửi email xác thực...');
+    // }
+    let registered = false;
+
+    if (options.manualCaptcha) {
+      console.log('\nĐã điền form Bugs. Vui lòng tự nhập captcha trên Bugs và bấm Sign Up.');
+      await signupPage.bringToFront().catch(() => { });
+      await signupPage.locator('#captchaText, input[name="captchaText"]').first().scrollIntoViewIfNeeded().catch(() => { });
+      await signupPage.locator('#captchaText, input[name="captchaText"]').first().focus().catch(() => { });
+
+      registered = await waitForRegistrationSuccess(signupPage);
+      if (!registered) {
+        throw new Error('Quá thời gian chờ bạn nhập captcha thủ công.');
+      }
+    } else {
+      console.log('\nĐã điền form Bugs. Bắt đầu giải mã CAPTCHA tự động...');
+
+      // Vòng lặp Retry: Cho phép tool đoán sai và thử lại tối đa 3 lần
+      // Vòng lặp Retry: Cho phép tool đoán sai và thử lại tối đa 10 lần
+      for (let attempt = 1; attempt <= 10; attempt++) {
+        const captchaText = await autoSolveCaptcha(signupPage);
+
+        if (!captchaText) {
+          console.warn(`[Lần ${attempt}] Không giải được ảnh, yêu cầu web đổi ảnh mới...`);
+          // Bấm nút Refresh Captcha dựa trên ID bạn vừa tìm được
+          await clickFirstAvailable(signupPage, ['#btnCaptchaRefresh', '.btnRefresh']).catch(() => { });
+          await sleep(2000);
+          continue;
+        }
+
+        console.log(`🤖 AI đoán CAPTCHA: [${captchaText}]`);
+
+        // 1. Điền mã vào ô Input (Đã cập nhật đúng ID #captchaText)
+        await fillBySelectors(signupPage, ['#captchaText', 'input[name="captchaText"]'], captchaText);
+
+        // 2. Bấm nút Sign Up (Đã cập nhật đúng ID #btnJoinComplete)
+        await scrollSignupButtonIntoView(signupPage);
+        await clickFirstAvailable(signupPage, ['#btnJoinComplete', 'a.btnJoin']).catch(() => { });
+
+        console.log(`Đã bấm Sign Up (Lần ${attempt}), đang chờ kết quả...`);
+
+        // 3. Đợi xem có thành công hay báo lỗi sai CAPTCHA
+        // Chờ nhanh tối đa 6 giây thay vì 4 phút
+        for (let i = 0; i < 6; i++) {
+          await sleep(1000); // Đợi 1 giây mỗi nhịp
+          const url = signupPage.url();
+          const text = await signupPage.locator('body').innerText().catch(() => '');
+
+          // Dấu hiệu thành công: Đổi URL hoặc hiện chữ báo check email
+          if (!url.includes('foreignerMemberMain') || (/authentication|e-?mail|sent|complete|가입|인증|메일/i.test(text) && !/captcha/i.test(text))) {
+            registered = true;
+            break;
+          }
+        }
+
+        if (registered) {
+          console.log('✅ Đăng ký thành công!');
+          break;
+        } else {
+          // Nếu web báo sai Captcha -> Bấm Refresh để tải ảnh mới và thử lại
+          console.warn(`[Lần ${attempt}] Đăng ký chưa thành công (Đoán sai Captcha). Thử lại...`);
+          await clickFirstAvailable(signupPage, ['#btnCaptchaRefresh']).catch(() => { });
+          await sleep(3000); // Chờ ảnh mới load ra
+        }
+      }
+
+      // Fallback: Nếu AI thử 10 lần đều xịt, chờ người dùng tự nhập tay
+      if (!registered) {
+        console.log('⚠️ AI giải CAPTCHA thất bại sau 10 lần. Chuyển về chế độ nhập tay.');
+
+        // Đưa trang đăng ký lên màn hình chính để người dùng nhập trực tiếp
+        await signupPage.bringToFront().catch(() => { });
+
+        console.log('Vui lòng tự nhập Captcha trên web và bấm Sign up. Tool đang tự động theo dõi và chờ bạn hoàn thành...');
+
+        // Chờ tự động tối đa 5 phút (300 giây) để người dùng thao tác
+        for (let i = 0; i < 300; i++) {
+          await sleep(1000);
+          const url = signupPage.url();
+          const text = await signupPage.locator('body').innerText().catch(() => '');
+
+          // Nhận diện màn hình Go to Bugs (hoặc có chữ authentication sent)
+          if (!url.includes('foreignerMemberMain') || (/authentication|e-?mail|sent|complete|가입|인증|메일/i.test(text) && !/captcha/i.test(text))) {
+            registered = true;
+            break;
+          }
+        }
+
+        if (registered) {
+          console.log('✅ Đã phát hiện đăng ký tay thành công! Đang chuyển sang bước xác thực email...');
+        } else {
+          throw new Error('Đã hết 5 phút chờ nhập tay CAPTCHA. Bỏ qua lượt này.');
+        }
+      }
+
+      // Fallback: Nếu AI thử 3 lần đều xịt, gọi người dùng cứu viện
+      // Fallback: Nếu AI thử 3 lần đều xịt, chờ người dùng tự nhập tay
+      // Fallback: Nếu AI thử 3 lần đều xịt, chờ người dùng tự nhập tay
+      if (!registered) {
+        console.log('⚠️ AI giải CAPTCHA thất bại sau 3 lần. Chuyển về chế độ nhập tay.');
+
+        // Phục hồi lại lệnh mở ảnh Captcha ở tab riêng cho bạn dễ đọc
+        console.log('Vui lòng tự nhập Captcha trên web và bấm Sign up. Tool đang tự động theo dõi và chờ bạn hoàn thành...');
+
+        // Chờ tự động tối đa 5 phút (300 giây) để người dùng thao tác
+        for (let i = 0; i < 300; i++) {
+          await sleep(1000);
+          const url = signupPage.url();
+          const text = await signupPage.locator('body').innerText().catch(() => '');
+
+          // Nhận diện màn hình Go to Bugs (hoặc có chữ authentication sent)
+          if (!url.includes('foreignerMemberMain') || (/authentication|e-?mail|sent|complete|가입|인증|메일/i.test(text) && !/captcha/i.test(text))) {
+            registered = true;
+            break;
+          }
+        }
+
+        if (registered) {
+          console.log('✅ Đã phát hiện đăng ký tay thành công! Đang chuyển sang bước xác thực email...');
+        } else {
+          throw new Error('Đã hết 5 phút chờ nhập tay CAPTCHA. Bỏ qua lượt này.');
+        }
+      }
     }
+    //
 
     //
     if (config.autoFocusBrowser !== false) {
@@ -509,12 +652,15 @@ async function openBugsLoginForm(page) {
     await bugsLoginButton.evaluate((element) => element.click());
   });
   await page.waitForFunction(() => {
-    const title = document.body?.innerText || '';
     const userId = document.querySelector('#user_id, input[name="user_id"]');
     const password = document.querySelector('#passwd, input[name="passwd"]');
-    return title.includes('벅스 아이디 또는 이메일로 로그인') && !!userId && !!password;
-  }, { timeout: 30_000 }).catch(() => { });
-  await page.waitForSelector('#user_id, input[name="user_id"]', { state: 'visible', timeout: 30_000 });
+    return !!userId && !!password;
+  }, { timeout: 5_000 }).catch(() => { });
+
+  await page.waitForSelector('#user_id, input[name="user_id"]', {
+    state: 'visible',
+    timeout: 5_000
+  });
 }
 
 async function randomizeTempMail(page, provider = TEMP_MAIL_PROVIDERS[0]) {
@@ -661,6 +807,109 @@ async function tickRequiredTerms(page) {
     if (!disabled) await box.check().catch(() => { });
   }
 }
+//test đoán captcha
+async function autoSolveCaptcha(page) {
+  // 1. Tìm thẻ chứa ảnh CAPTCHA
+  const captchaImage = page.locator('.captchaBox img, img[src*="api-captcha"], img[src*="captcha"]').first();
+  await captchaImage.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => { });
+
+  if (!(await captchaImage.count())) {
+    console.warn('Không tìm thấy ảnh Captcha trên trang.');
+    return null;
+  }
+
+  // 2. Ép kích thước thật và chụp ảnh (Tuyệt chiêu tránh lỗi bảo mật CORS)
+  // 2. Cách ly ảnh, lót nền trắng và ép kích thước thật để chụp
+  const imagePath = path.resolve(`logs/captcha_current_${Date.now()}.png`);
+
+  await captchaImage.evaluate((img) => {
+    // Nhấc bổng ảnh ra khỏi layout web, ghim lên góc trên cùng bên trái
+    img.style.position = 'fixed';
+    img.style.top = '0px';
+    img.style.left = '0px';
+    img.style.zIndex = '2147483647'; // Đưa lên lớp cao nhất, đè lên mọi thứ
+
+    // Lót nền trắng tinh phía sau lưng để che lấp mọi chữ HTML bị lọt vào
+    img.style.backgroundColor = '#FFFFFF';
+
+    // Xóa viền, thêm một lớp đệm (padding) trắng nhỏ xung quanh để AI dễ nhận diện hơn
+    img.style.padding = '8px';
+    img.style.margin = '0px';
+    img.style.border = 'none';
+
+    // Ép bung kích thước về đúng độ phân giải gốc
+    img.style.width = img.naturalWidth + 'px';
+    img.style.height = img.naturalHeight + 'px';
+    img.style.maxWidth = 'none';
+    img.style.maxHeight = 'none';
+  });
+
+  // Chờ nửa giây để trình duyệt kịp dàn xếp lại cái ảnh
+  await page.waitForTimeout(500);
+
+  // Chụp ảnh cái khung thẻ img
+  await captchaImage.screenshot({ path: imagePath });
+  console.log(`Đã chụp ảnh CAPTCHA nét căng, sạch bóng nhiễu HTML tại: ${imagePath}`);
+
+  // 3. Gọi script Python ddddocr để giải mã
+  // 3. Gọi file giải mã CAPTCHA (.exe)
+  try {
+    let solverExe = path.join(__dirname, 'solve_captcha.exe');
+    if (solverExe.includes('app.asar')) {
+      solverExe = solverExe.replace('app.asar', 'app.asar.unpacked');
+    }
+
+    // Bật log đường dẫn và kết quả trả về
+    console.log(`[DEBUG] Đường dẫn file EXE: ${solverExe}`);
+    const { stdout, stderr } = await execAsync(`"${solverExe}" "${imagePath}"`);
+
+    console.log(`[DEBUG AI] Kết quả: ${stdout}`);
+    if (stderr) console.log(`[DEBUG AI] Lỗi ngầm: ${stderr}`);
+
+    const result = stdout.trim().toUpperCase();
+
+    if (result && !result.includes('ERROR:')) {
+      return result;
+    }
+    return null;
+  } catch (error) {
+    // In ra toàn bộ chi tiết mã lỗi để bắt tận tay
+    console.error('[CRITICAL ERROR] Lỗi khi gọi EXE:', error.stack || error.message);
+    return null;
+  }
+}
+//
+//
+async function openCaptchaImageTab(context, page) {
+  const captchaImage = page.locator('.captchaBox img, img[src*="api-captcha"], img[src*="captcha"]').first();
+
+  await captchaImage.waitFor({
+    state: 'visible',
+    timeout: 15_000
+  }).catch(() => { });
+
+  const captchaSrc = await captchaImage.getAttribute('src').catch(() => '');
+
+  if (!captchaSrc) {
+    console.log('Không tìm thấy link ảnh Captcha để mở tab riêng.');
+    return null;
+  }
+
+  const captchaUrl = new URL(captchaSrc, page.url()).href;
+
+  const imagePage = await context.newPage();
+  await imagePage.goto(captchaUrl, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30_000
+  }).catch(() => { });
+
+  await imagePage.bringToFront().catch(() => { });
+
+  console.log(`Đã mở ảnh Captcha ở tab riêng: ${captchaUrl}`);
+
+  return imagePage;
+}
+//
 
 async function waitForRegistrationSuccess(page) {
   const successPatterns = [
@@ -685,7 +934,7 @@ async function waitForRegistrationSuccess(page) {
 
 //
 async function waitAfterLoginSubmit(context, page, initialLoginUrl) {
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + 4_000;
 
   while (Date.now() < deadline) {
     const loginErrorText = await readLoginErrorMessage(page);
@@ -693,12 +942,29 @@ async function waitAfterLoginSubmit(context, page, initialLoginUrl) {
       throw new Error(INVALID_LOGIN_MESSAGE);
     }
 
-    await sleep(500);
-  }
+    const url = page.url();
+    const stillOnLoginPath = /loginview|\/member\/login/i.test(url);
 
-  const finalLoginErrorText = await readLoginErrorMessage(page);
-  if (finalLoginErrorText) {
-    throw new Error(INVALID_LOGIN_MESSAGE);
+    const loginFormVisible = await page
+      .locator('#user_id, input[name="user_id"], #passwd, input[name="passwd"]')
+      .first()
+      .isVisible({ timeout: 200 })
+      .catch(() => false);
+
+    if (!stillOnLoginPath || !loginFormVisible) {
+      await sleep(800);
+      return true;
+    }
+
+    const pages = typeof context.pages === 'function' ? context.pages() : [page];
+    for (const currentPage of pages) {
+      if (await hasLoggedInIndicators(currentPage)) {
+        await sleep(800);
+        return true;
+      }
+    }
+
+    await sleep(300);
   }
 
   return true;
@@ -767,7 +1033,7 @@ async function readLoginErrorMessage(page) {
   const errorText = await page
     .locator('#loginDesc, form#frmLoginLayer .validation, .validation, .error, .txtError')
     .first()
-    .innerText()
+    .innerText({ timeout: 300 })
     .catch(() => '');
 
   if (invalidLoginPattern.test(errorText)) {
@@ -807,7 +1073,7 @@ async function submitLogin(page) {
     buttonElement.click();
     return true;
   }).catch(() => { });
-  await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => { });
+  await page.waitForTimeout(500);
   return true;
 }
 
@@ -925,10 +1191,10 @@ async function voteFavorite(context, config = {}) {
     .catch(() => false);
 
   if (loginRequired) {
-    console.warn('Trang vote báo chưa nhận session login. Đợi thêm rồi thử mở lại trang vote...');
-    await sleep(3_000);
+    console.warn('Trang vote chưa nhận session login. Đợi ngắn rồi thử lại...');
+    await sleep(1_500);
 
-    await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'commit', timeout: 15_000 });
+    await votePage.waitForLoadState('domcontentloaded', { timeout: 5_000 }).catch(() => { });
     await votePage.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => { });
     // await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
