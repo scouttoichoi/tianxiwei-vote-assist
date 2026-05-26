@@ -1526,11 +1526,7 @@ runAllLoginButton.addEventListener('click', async () => {
 });
 
 stopAllButton.addEventListener('click', async () => {
-  for (const inst of instances) {
-    if (inst.running) {
-      await window.txw.stopInstance(inst.id);
-    }
-  }
+  await window.txw.stopAllInstances();
 });
 
 // First Init app

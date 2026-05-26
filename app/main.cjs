@@ -14,6 +14,7 @@ const activeAdbDevices = new Map(); // // adbLockKey -> instanceId
 let lastNotificationKey = '';
 let setupPromise = null;
 let ipBlockStopInProgress = false;
+const FORCE_KILL_DELAY_MS = 1500;
 
 const rootDir = app.getAppPath();
 const runtimeDir = app.getPath('userData');
@@ -105,7 +106,40 @@ function isIpTemporarilyBlockedLog(text) {
   return /Your IP is temporarily unavailable for membership/i.test(text || '');
 }
 
-function stopAllActiveWorkers(reason = '') {
+async function stopWorkerByInstanceId(instanceId) {
+  for (const [deviceId, ownerInstanceId] of activeAdbDevices.entries()) {
+    if (ownerInstanceId === instanceId) {
+      activeAdbDevices.delete(deviceId);
+    }
+  }
+
+  if (!activeWorkers.has(instanceId)) return false;
+  const child = activeWorkers.get(instanceId);
+  if (!child) return false;
+
+  stoppingWorkers.add(instanceId);
+
+  try {
+    child.kill();
+  } catch {
+    // Ignore initial kill errors and still try cleanup/fallback.
+  }
+
+  setTimeout(() => {
+    if (!activeWorkers.has(instanceId)) return;
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // Ignore force kill errors.
+    }
+  }, FORCE_KILL_DELAY_MS);
+
+  activeWorkers.delete(instanceId);
+  send('run-state', { instanceId, running: false });
+  return true;
+}
+
+async function stopAllActiveWorkers(reason = '') {
   if (ipBlockStopInProgress) return;
   ipBlockStopInProgress = true;
 
@@ -113,18 +147,7 @@ function stopAllActiveWorkers(reason = '') {
   console.warn(`[System] Dừng toàn bộ worker do phát hiện IP bị block.${reason ? ` Lý do: ${reason}` : ''}`);
 
   for (const instanceId of runningInstanceIds) {
-    for (const [deviceId, ownerInstanceId] of activeAdbDevices.entries()) {
-      if (ownerInstanceId === instanceId) {
-        activeAdbDevices.delete(deviceId);
-      }
-    }
-
-    const child = activeWorkers.get(instanceId);
-    if (!child) continue;
-    stoppingWorkers.add(instanceId);
-    child.kill();
-    activeWorkers.delete(instanceId);
-    send('run-state', { instanceId, running: false });
+    await stopWorkerByInstanceId(instanceId);
   }
 
   send('worker-log', {
@@ -158,7 +181,7 @@ function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '', o
       send('worker-log', { instanceId, text });
       notifyIfNeeded(text, instanceName);
       if (isIpTemporarilyBlockedLog(text)) {
-        stopAllActiveWorkers(text.trim());
+        void stopAllActiveWorkers(text.trim());
       }
     });
     child.stderr?.on('data', (data) => {
@@ -167,7 +190,7 @@ function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '', o
       send('worker-log', { instanceId, text });
       notifyIfNeeded(text, instanceName);
       if (isIpTemporarilyBlockedLog(text)) {
-        stopAllActiveWorkers(text.trim());
+        void stopAllActiveWorkers(text.trim());
       }
     });
     child.on('error', (error) => {
@@ -1137,19 +1160,14 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
 });
 
 ipcMain.handle('instances:stop', async (_event, instanceId) => {
+  return await stopWorkerByInstanceId(instanceId);
+});
 
-  for (const [deviceId, ownerInstanceId] of activeAdbDevices.entries()) {
-    if (ownerInstanceId === instanceId) {
-      activeAdbDevices.delete(deviceId);
-    }
+ipcMain.handle('instances:stop-all', async () => {
+  const runningInstanceIds = [...activeWorkers.keys()];
+  for (const instanceId of runningInstanceIds) {
+    await stopWorkerByInstanceId(instanceId);
   }
-
-  if (!activeWorkers.has(instanceId)) return false;
-  const child = activeWorkers.get(instanceId);
-  stoppingWorkers.add(instanceId);
-  child.kill();
-  activeWorkers.delete(instanceId);
-  send('run-state', { instanceId, running: false });
   return true;
 });
 

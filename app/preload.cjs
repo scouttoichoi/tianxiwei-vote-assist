@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('txw', {
   // Running APIs
   startInstance: (id, mode, options) => ipcRenderer.invoke('instances:start', id, mode, options),
   stopInstance: (id) => ipcRenderer.invoke('instances:stop', id),
+  stopAllInstances: () => ipcRenderer.invoke('instances:stop-all'),
   
   // Data APIs per Instance
   getInstanceSummary: (id) => ipcRenderer.invoke('instances:get-summary', id),
