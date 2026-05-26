@@ -13,6 +13,7 @@ const stoppingWorkers = new Set(); // key: instanceId, true when user intentiona
 const activeAdbDevices = new Map(); // // adbLockKey -> instanceId
 let lastNotificationKey = '';
 let setupPromise = null;
+let ipBlockStopInProgress = false;
 
 const rootDir = app.getAppPath();
 const runtimeDir = app.getPath('userData');
@@ -100,6 +101,47 @@ function notifyIfNeeded(text, instanceName = '') {
   }
 }
 
+function isIpTemporarilyBlockedLog(text) {
+  return /Your IP is temporarily unavailable for membership/i.test(text || '');
+}
+
+function stopAllActiveWorkers(reason = '') {
+  if (ipBlockStopInProgress) return;
+  ipBlockStopInProgress = true;
+
+  const runningInstanceIds = [...activeWorkers.keys()];
+  console.warn(`[System] Dừng toàn bộ worker do phát hiện IP bị block.${reason ? ` Lý do: ${reason}` : ''}`);
+
+  for (const instanceId of runningInstanceIds) {
+    for (const [deviceId, ownerInstanceId] of activeAdbDevices.entries()) {
+      if (ownerInstanceId === instanceId) {
+        activeAdbDevices.delete(deviceId);
+      }
+    }
+
+    const child = activeWorkers.get(instanceId);
+    if (!child) continue;
+    stoppingWorkers.add(instanceId);
+    child.kill();
+    activeWorkers.delete(instanceId);
+    send('run-state', { instanceId, running: false });
+  }
+
+  send('worker-log', {
+    instanceId: 'system',
+    text: '[System] Phát hiện lỗi "Your IP is temporarily unavailable for membership". Đã dừng toàn bộ tiến trình đang chạy.\n'
+  });
+
+  if (Notification.isSupported()) {
+    new Notification({
+      title: 'Đã dừng toàn bộ tiến trình',
+      body: 'Phát hiện IP đang bị Bugs chặn tạm thời. App đã dừng tất cả worker.'
+    }).show();
+  }
+
+  ipBlockStopInProgress = false;
+}
+
 function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '', onStart = null) {
   return new Promise((resolve, reject) => {
     const child = fork(modulePath, args, {
@@ -115,12 +157,18 @@ function runUtility(modulePath, args = [], cwd, instanceId, instanceName = '', o
       console.log(`[Worker:${instanceId}] ${text.trim()}`);
       send('worker-log', { instanceId, text });
       notifyIfNeeded(text, instanceName);
+      if (isIpTemporarilyBlockedLog(text)) {
+        stopAllActiveWorkers(text.trim());
+      }
     });
     child.stderr?.on('data', (data) => {
       const text = data.toString();
       console.error(`[Worker:${instanceId}:stderr] ${text.trim()}`);
       send('worker-log', { instanceId, text });
       notifyIfNeeded(text, instanceName);
+      if (isIpTemporarilyBlockedLog(text)) {
+        stopAllActiveWorkers(text.trim());
+      }
     });
     child.on('error', (error) => {
       activeWorkers.delete(instanceId);
