@@ -54,6 +54,7 @@ const confirmEmulatorDialog = document.getElementById('confirmEmulatorDialog');
 // Global controls
 const addInstanceButton = document.getElementById('addInstanceButton');
 const runAllSignupButton = document.getElementById('runAllSignupButton');
+const runAllSignupManualButton = document.getElementById('runAllSignupManualButton');
 const runAllLoginButton = document.getElementById('runAllLoginButton');
 const stopAllButton = document.getElementById('stopAllButton');
 
@@ -213,12 +214,17 @@ function renderInstancesList() {
     if (inst.running) {
       statusClass = 'running';
       statusText = t('running');
-      if (inst.runningMode === 'ads' || /quảng cáo|ad/i.test(log)) {
+      if (inst.runningMode === 'ads') {
         statusClass = 'runningAds';
         statusText = t('runningAds');
-      } else if (/Vui lòng nhập captcha/i.test(log) || /captcha/i.test(log)) {
+      } else if (inst.runningMode === 'signup-manual') {
         statusClass = 'waitingCaptcha';
         statusText = t('waitingCaptcha');
+      } else if (inst.runningMode === 'signup' || inst.runningMode === 'login') {
+        if (/Vui lòng tự nhập|nhập tay|chờ nhập tay/i.test(log)) {
+          statusClass = 'waitingCaptcha';
+          statusText = t('waitingCaptcha');
+        }
       }
     }
 
@@ -460,8 +466,17 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
     row.classList.add('is-running');
     const badge = row.querySelector('.badgeStatus');
     if (badge) {
-      badge.className = 'badgeStatus runningAds';
-      badge.textContent = mode === 'ads' ? t('runningAds') : t('running');
+      let optClass = 'running';
+      let optText = t('running');
+      if (mode === 'ads') {
+        optClass = 'runningAds';
+        optText = t('runningAds');
+      } else if (mode === 'signup-manual') {
+        optClass = 'waitingCaptcha';
+        optText = t('waitingCaptcha');
+      }
+      badge.className = `badgeStatus ${optClass}`;
+      badge.textContent = optText;
     }
     const rowActions = row.querySelector('.rowActions');
     if (rowActions && !rowActions.querySelector('.btnRowStop')) {
@@ -1479,6 +1494,23 @@ runAllSignupButton.addEventListener('click', async () => {
   for (const inst of instances) {
     if (!inst.running) {
       startInstanceProcess(inst.id, 'signup', { count }, false);
+      await new Promise((resolve) => setTimeout(resolve, 8000));
+    }
+  }
+});
+
+runAllSignupManualButton.addEventListener('click', async () => {
+  const count = await requestSignupCount();
+  if (count === null) return;
+
+  if (!Number.isInteger(count) || count < 1) {
+    openModal(t('invalidCountTitle'), `<p>${t('invalidCountMessage')}</p>`);
+    return;
+  }
+
+  for (const inst of instances) {
+    if (!inst.running) {
+      startInstanceProcess(inst.id, 'signup-manual', { count, manualCaptcha: true }, false);
       await new Promise((resolve) => setTimeout(resolve, 8000));
     }
   }

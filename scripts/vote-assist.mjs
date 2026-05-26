@@ -35,49 +35,6 @@ const TEMP_MAIL_PROVIDERS = [
       'text=Refresh',
       '[aria-label*="refresh" i]'
     ]
-  },
-  {
-    id: 'tempail',
-    label: 'tempail.com',
-    url: 'https://tempail.com/',
-    rotateSelectors: [
-      'button:has-text("new")',
-      'button:has-text("New")',
-      'text=new',
-      'text=New',
-      '[aria-label*="new" i]'
-    ],
-    refreshSelectors: [
-      'button:has-text("refresh")',
-      'button:has-text("Refresh")',
-      'text=refresh',
-      'text=Refresh',
-      '[aria-label*="refresh" i]'
-    ]
-  },
-  {
-    id: 'tempmailo',
-    label: 'tempmailo.com',
-    url: 'https://tempmailo.com/',
-    rotateSelectors: [
-      'button:has-text("new")',
-      'button:has-text("New")',
-      'button:has-text("random")',
-      'button:has-text("Random")',
-      'text=new',
-      'text=New',
-      'text=random',
-      'text=Random',
-      '[aria-label*="new" i]',
-      '[aria-label*="random" i]'
-    ],
-    refreshSelectors: [
-      'button:has-text("refresh")',
-      'button:has-text("Refresh")',
-      'text=refresh',
-      'text=Refresh',
-      '[aria-label*="refresh" i]'
-    ]
   }
 ];
 const BUGS_SIGNUP_URL = 'https://secure.bugs.co.kr/member/join/foreignerMemberMain';
@@ -95,6 +52,24 @@ const EMAIL_VERIFY_TIMEOUT_MS = 30_000;
 const INVALID_LOGIN_MESSAGE = '아이디 또는 비밀번호를 확인해 주세요.';
 const LOGIN_NOT_CONFIRMED_ERROR = 'login-not-confirmed';
 const BUGS_VOTE_TIMEZONE = 'Asia/Seoul';
+
+let activeBrowser = null;
+let isPythonSupported = null;
+
+async function handleExit() {
+  console.log('\n[System] Nhận tín hiệu dừng (SIGTERM/SIGINT), đang đóng trình duyệt...');
+  if (activeBrowser) {
+    try {
+      await activeBrowser.close();
+      console.log('[System] Đã đóng trình duyệt sạch sẽ.');
+    } catch (e) {
+      // Ignore
+    }
+  }
+  process.exit(0);
+}
+process.on('SIGTERM', handleExit);
+process.on('SIGINT', handleExit);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -217,32 +192,49 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
     } else {
       console.log('\nĐã điền form Bugs. Bắt đầu giải mã CAPTCHA tự động...');
 
-      // Vòng lặp Retry: Cho phép tool đoán sai và thử lại tối đa 3 lần
-      // Vòng lặp Retry: Cho phép tool đoán sai và thử lại tối đa 10 lần
-      for (let attempt = 1; attempt <= 10; attempt++) {
+      // Vòng lặp Retry: Cho phép tool đoán sai và thử lại liên tục cho đến khi giải thành công
+      for (let attempt = 1; ; attempt++) {
+        const attemptStart = Date.now();
+        console.log(`\n[Lần ${attempt}] --- Bắt đầu chu kỳ xử lý CAPTCHA ---`);
+
+        const solveStart = Date.now();
         const captchaText = await autoSolveCaptcha(signupPage);
+        const solveDuration = Date.now() - solveStart;
 
         if (!captchaText) {
-          console.warn(`[Lần ${attempt}] Không giải được ảnh, yêu cầu web đổi ảnh mới...`);
-          // Bấm nút Refresh Captcha dựa trên ID bạn vừa tìm được
+          console.warn(`[Lần ${attempt}] Không giải được ảnh (Mất ${solveDuration}ms). Yêu cầu đổi ảnh mới...`);
           await clickFirstAvailable(signupPage, ['#btnCaptchaRefresh', '.btnRefresh']).catch(() => { });
           await sleep(2000);
           continue;
         }
 
-        console.log(`🤖 AI đoán CAPTCHA: [${captchaText}]`);
+        // --- Cải tiến lọc định dạng CAPTCHA để tiết kiệm thời gian ---
+        const normalizedText = captchaText.trim().toUpperCase();
+        // Kiểm tra: Phải có 4 hoặc 5 ký tự, và chỉ gồm chữ cái viết hoa & số
+        const isValidFormat = /^[A-Z0-9]{4,5}$/.test(normalizedText);
 
+        if (!isValidFormat) {
+          console.warn(`[Lần ${attempt}] CAPTCHA đoán được [${normalizedText}] không đúng định dạng (Phải có 4-5 ký tự hoa/số). Tự động bỏ qua và đổi ảnh mới để tránh hết session...`);
+          await clickFirstAvailable(signupPage, ['#btnCaptchaRefresh', '.btnRefresh']).catch(() => { });
+          await sleep(2000);
+          continue;
+        }
+
+        console.log(`🤖 AI đoán CAPTCHA hợp lệ: [${normalizedText}] (Thời gian từ lúc lấy ảnh đến giải xong: ${solveDuration}ms)`);
+
+        const actionStart = Date.now();
         // 1. Điền mã vào ô Input (Đã cập nhật đúng ID #captchaText)
-        await fillBySelectors(signupPage, ['#captchaText', 'input[name="captchaText"]'], captchaText);
+        await fillBySelectors(signupPage, ['#captchaText', 'input[name="captchaText"]'], normalizedText);
 
         // 2. Bấm nút Sign Up (Đã cập nhật đúng ID #btnJoinComplete)
         await scrollSignupButtonIntoView(signupPage);
         await clickFirstAvailable(signupPage, ['#btnJoinComplete', 'a.btnJoin']).catch(() => { });
+        const fillAndSubmitDuration = Date.now() - actionStart;
 
-        console.log(`Đã bấm Sign Up (Lần ${attempt}), đang chờ kết quả...`);
+        console.log(`Đã bấm Sign Up (Lần ${attempt}), thời gian điền & submit: ${fillAndSubmitDuration}ms. Đang chờ kết quả...`);
 
         // 3. Đợi xem có thành công hay báo lỗi sai CAPTCHA
-        // Chờ nhanh tối đa 6 giây thay vì 4 phút
+        let checkStart = Date.now();
         for (let i = 0; i < 6; i++) {
           await sleep(1000); // Đợi 1 giây mỗi nhịp
           const url = signupPage.url();
@@ -254,73 +246,17 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
             break;
           }
         }
+        const checkDuration = Date.now() - checkStart;
+        const totalAttemptDuration = Date.now() - attemptStart;
 
         if (registered) {
-          console.log('✅ Đăng ký thành công!');
+          console.log(`✅ Đăng ký thành công! (Tổng thời gian chu kỳ: ${totalAttemptDuration}ms, thời gian đợi web duyệt: ${checkDuration}ms)`);
           break;
         } else {
           // Nếu web báo sai Captcha -> Bấm Refresh để tải ảnh mới và thử lại
-          console.warn(`[Lần ${attempt}] Đăng ký chưa thành công (Đoán sai Captcha). Thử lại...`);
+          console.warn(`[Lần ${attempt}] Đăng ký chưa thành công (Đoán sai Captcha hoặc hết hạn session). Tổng thời gian đã mất: ${totalAttemptDuration}ms. Thử lại...`);
           await clickFirstAvailable(signupPage, ['#btnCaptchaRefresh']).catch(() => { });
           await sleep(3000); // Chờ ảnh mới load ra
-        }
-      }
-
-      // Fallback: Nếu AI thử 10 lần đều xịt, chờ người dùng tự nhập tay
-      if (!registered) {
-        console.log('⚠️ AI giải CAPTCHA thất bại sau 10 lần. Chuyển về chế độ nhập tay.');
-
-        // Đưa trang đăng ký lên màn hình chính để người dùng nhập trực tiếp
-        await signupPage.bringToFront().catch(() => { });
-
-        console.log('Vui lòng tự nhập Captcha trên web và bấm Sign up. Tool đang tự động theo dõi và chờ bạn hoàn thành...');
-
-        // Chờ tự động tối đa 5 phút (300 giây) để người dùng thao tác
-        for (let i = 0; i < 300; i++) {
-          await sleep(1000);
-          const url = signupPage.url();
-          const text = await signupPage.locator('body').innerText().catch(() => '');
-
-          // Nhận diện màn hình Go to Bugs (hoặc có chữ authentication sent)
-          if (!url.includes('foreignerMemberMain') || (/authentication|e-?mail|sent|complete|가입|인증|메일/i.test(text) && !/captcha/i.test(text))) {
-            registered = true;
-            break;
-          }
-        }
-
-        if (registered) {
-          console.log('✅ Đã phát hiện đăng ký tay thành công! Đang chuyển sang bước xác thực email...');
-        } else {
-          throw new Error('Đã hết 5 phút chờ nhập tay CAPTCHA. Bỏ qua lượt này.');
-        }
-      }
-
-      // Fallback: Nếu AI thử 3 lần đều xịt, gọi người dùng cứu viện
-      // Fallback: Nếu AI thử 3 lần đều xịt, chờ người dùng tự nhập tay
-      // Fallback: Nếu AI thử 3 lần đều xịt, chờ người dùng tự nhập tay
-      if (!registered) {
-        console.log('⚠️ AI giải CAPTCHA thất bại sau 3 lần. Chuyển về chế độ nhập tay.');
-
-        // Phục hồi lại lệnh mở ảnh Captcha ở tab riêng cho bạn dễ đọc
-        console.log('Vui lòng tự nhập Captcha trên web và bấm Sign up. Tool đang tự động theo dõi và chờ bạn hoàn thành...');
-
-        // Chờ tự động tối đa 5 phút (300 giây) để người dùng thao tác
-        for (let i = 0; i < 300; i++) {
-          await sleep(1000);
-          const url = signupPage.url();
-          const text = await signupPage.locator('body').innerText().catch(() => '');
-
-          // Nhận diện màn hình Go to Bugs (hoặc có chữ authentication sent)
-          if (!url.includes('foreignerMemberMain') || (/authentication|e-?mail|sent|complete|가입|인증|메일/i.test(text) && !/captcha/i.test(text))) {
-            registered = true;
-            break;
-          }
-        }
-
-        if (registered) {
-          console.log('✅ Đã phát hiện đăng ký tay thành công! Đang chuyển sang bước xác thực email...');
-        } else {
-          throw new Error('Đã hết 5 phút chờ nhập tay CAPTCHA. Bỏ qua lượt này.');
         }
       }
     }
@@ -348,7 +284,10 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
     console.log(`Hoàn tất đăng ký + vote. Đã lưu account vào: ${ACCOUNTS_PATH}`);
     return true;
   } finally {
-    await browser.close?.();
+    if (activeBrowser) {
+      await activeBrowser.close?.().catch(() => {});
+      activeBrowser = null;
+    }
     if (config.freshProfilePerRun ?? true) {
       await fs.rm(USER_DATA_DIR, { recursive: true, force: true }).catch(() => { });
     }
@@ -414,7 +353,10 @@ async function runLoginCommand(config) {
       await appendLog({ email: account.email, failedAt: new Date().toISOString(), status: 'login-failed', error: error.message }).catch(() => { });
       console.warn(`Lỗi account ${account.email}: ${error.message}`);
     } finally {
-      await browser.close?.();
+      if (activeBrowser) {
+        await activeBrowser.close?.().catch(() => {});
+        activeBrowser = null;
+      }
       if (config.freshProfilePerRun ?? true) {
         await fs.rm(USER_DATA_DIR, { recursive: true, force: true }).catch(() => { });
       }
@@ -527,8 +469,9 @@ async function launchBrowser(api, config) {
       '--window-position=80,20'
     ];
 
+  let browserInstance;
   if (typeof api.launchPersistentContext === 'function') {
-    return api.launchPersistentContext({
+    browserInstance = await api.launchPersistentContext({
       headless: false,
       humanize: true,
       userDataDir: config.userDataDir ?? USER_DATA_DIR,
@@ -538,30 +481,27 @@ async function launchBrowser(api, config) {
         args: browserArgs
       }
     });
-  }
-
-  if (typeof api.launchContext === 'function') {
-    return api.launchContext({
+  } else if (typeof api.launchContext === 'function') {
+    browserInstance = await api.launchContext({
       headless: false,
       humanize: true,
       proxy: config.proxy,
       viewport: config.viewport ?? DEFAULT_VIEWPORT,
       args: browserArgs
-
     });
-  }
-
-  if (typeof api.launch === 'function') {
-    return api.launch({
+  } else if (typeof api.launch === 'function') {
+    browserInstance = await api.launch({
       headless: false,
       humanize: true,
       proxy: config.proxy,
       args: browserArgs
-
     });
+  } else {
+    throw new Error('Không tìm thấy API launch tương thích từ cloakbrowser.');
   }
 
-  throw new Error('Không tìm thấy API launch tương thích từ cloakbrowser.');
+  activeBrowser = browserInstance;
+  return browserInstance;
 }
 
 async function getTempMailAddress(page, provider = TEMP_MAIL_PROVIDERS[0]) {
@@ -696,22 +636,36 @@ async function fillBySelectors(page, selectors, value) {
   for (const selector of selectors) {
     const field = page.locator(selector).first();
     if (!(await field.count().catch(() => 0))) continue;
+    
+    // Thử điền trực tiếp bằng evaluate (Siêu tốc độ <2ms, tránh Playwright check ổn định và animation)
+    const filled = await field.evaluate((element, nextValue) => {
+      try {
+        const prototype = element instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+        const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+        descriptor?.set?.call(element, nextValue);
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        element.dispatchEvent(new Event('blur', { bubbles: true }));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }, value).catch(() => false);
+
+    if (filled) {
+      const actual = await field.inputValue().catch(() => '');
+      if (actual === value) return;
+    }
+
+    // Dự phòng (Fallback) nếu evaluate lỗi
     await field.scrollIntoViewIfNeeded().catch(() => { });
     await field.fill(value, { force: true }).catch(async () => {
       await field.click({ force: true });
       await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
       await page.keyboard.type(value, { delay: 20 });
     });
-    await field.evaluate((element, nextValue) => {
-      const prototype = element instanceof HTMLTextAreaElement
-        ? HTMLTextAreaElement.prototype
-        : HTMLInputElement.prototype;
-      const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
-      descriptor?.set?.call(element, nextValue);
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-      element.dispatchEvent(new Event('blur', { bubbles: true }));
-    }, value).catch(() => { });
     const actual = await field.inputValue().catch(() => '');
     if (actual === value) return;
   }
@@ -728,7 +682,8 @@ async function scrollSignupButtonIntoView(page) {
     }
     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
   });
-  await page.waitForTimeout(500);
+  // Giảm delay tối đa để nâng cao tốc độ phản hồi
+  await page.waitForTimeout(50);
 }
 
 async function fillPasswordFields(page) {
@@ -809,6 +764,7 @@ async function tickRequiredTerms(page) {
 }
 //test đoán captcha
 async function autoSolveCaptcha(page) {
+  const startTime = Date.now();
   // 1. Tìm thẻ chứa ảnh CAPTCHA
   const captchaImage = page.locator('.captchaBox img, img[src*="api-captcha"], img[src*="captcha"]').first();
   await captchaImage.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => { });
@@ -849,19 +805,76 @@ async function autoSolveCaptcha(page) {
 
   // Chụp ảnh cái khung thẻ img
   await captchaImage.screenshot({ path: imagePath });
-  console.log(`Đã chụp ảnh CAPTCHA nét căng, sạch bóng nhiễu HTML tại: ${imagePath}`);
+  const captureDuration = Date.now() - startTime;
+  console.log(`Đã chụp ảnh CAPTCHA nét căng, sạch bóng nhiễu HTML tại: ${imagePath} (Mất ${captureDuration}ms)`);
 
-  // 3. Gọi script Python ddddocr để giải mã
-  // 3. Gọi file giải mã CAPTCHA (.exe)
+  // 3. Gọi công cụ giải CAPTCHA (ưu tiên Python trực tiếp cho tốc độ 290ms, fallback về nhị phân nếu không cài Python)
   try {
-    let solverExe = path.join(__dirname, 'solve_captcha.exe');
-    if (solverExe.includes('app.asar')) {
-      solverExe = solverExe.replace('app.asar', 'app.asar.unpacked');
+    let solverCmd = '';
+    
+    if (process.platform !== 'win32') {
+      if (isPythonSupported === null) {
+        try {
+          await execAsync(`python3 -c "import ddddocr"`);
+          isPythonSupported = true;
+          console.log('[DEBUG] Khởi động: Phát hiện Python 3 & ddddocr hoạt động tốt trên hệ thống.');
+        } catch (e) {
+          isPythonSupported = false;
+          console.log('[DEBUG] Khởi động: Không có sẵn Python 3 / ddddocr. Sẽ dùng file nhị phân làm phương án chạy.');
+        }
+      }
+
+      if (isPythonSupported) {
+        let solverPy = path.join(__dirname, 'solve_captcha.py');
+        if (solverPy.includes('app.asar')) {
+          solverPy = solverPy.replace('app.asar', 'app.asar.unpacked');
+        }
+        console.log(`[DEBUG] Sử dụng Python 3 trực tiếp (Tốc độ tối đa ~290ms): ${solverPy}`);
+        solverCmd = `python3 "${solverPy}" "${imagePath}"`;
+      }
     }
 
-    // Bật log đường dẫn và kết quả trả về
-    console.log(`[DEBUG] Đường dẫn file EXE: ${solverExe}`);
-    const { stdout, stderr } = await execAsync(`"${solverExe}" "${imagePath}"`);
+    if (!solverCmd) {
+      if (process.platform === 'win32') {
+        let solverExe = path.join(__dirname, 'solve_captcha.exe');
+        if (solverExe.includes('app.asar')) {
+          solverExe = solverExe.replace('app.asar', 'app.asar.unpacked');
+        }
+        console.log(`[DEBUG] Đường dẫn file EXE (Windows): ${solverExe}`);
+        solverCmd = `"${solverExe}" "${imagePath}"`;
+      } else if (process.platform === 'darwin') {
+        let solverMac = path.join(__dirname, 'solve_captcha_mac');
+        if (solverMac.includes('app.asar')) {
+          solverMac = solverMac.replace('app.asar', 'app.asar.unpacked');
+        }
+        console.log(`[DEBUG] Đường dẫn file nhị phân (macOS - Fallback): ${solverMac}`);
+        solverCmd = `"${solverMac}" "${imagePath}"`;
+      } else {
+        let solverPy = path.join(__dirname, 'solve_captcha.py');
+        if (solverPy.includes('app.asar')) {
+          solverPy = solverPy.replace('app.asar', 'app.asar.unpacked');
+        }
+        console.log(`[DEBUG] Đường dẫn file Python (Fallback): ${solverPy}`);
+        solverCmd = `python3 "${solverPy}" "${imagePath}"`;
+      }
+    }
+
+    let stdout, stderr;
+    try {
+      const res = await execAsync(solverCmd);
+      stdout = res.stdout;
+      stderr = res.stderr;
+    } catch (err) {
+      if (process.platform !== 'win32' && process.platform !== 'darwin' && solverCmd.startsWith('python3')) {
+        console.warn('[WARN] Lỗi khi gọi python3, thử fallback sang python...');
+        solverCmd = solverCmd.replace('python3', 'python');
+        const res = await execAsync(solverCmd);
+        stdout = res.stdout;
+        stderr = res.stderr;
+      } else {
+        throw err;
+      }
+    }
 
     console.log(`[DEBUG AI] Kết quả: ${stdout}`);
     if (stderr) console.log(`[DEBUG AI] Lỗi ngầm: ${stderr}`);
@@ -874,7 +887,16 @@ async function autoSolveCaptcha(page) {
     return null;
   } catch (error) {
     // In ra toàn bộ chi tiết mã lỗi để bắt tận tay
-    console.error('[CRITICAL ERROR] Lỗi khi gọi EXE:', error.stack || error.message);
+    console.error('[CRITICAL ERROR] Lỗi khi gọi bộ giải CAPTCHA:', error.stack || error.message);
+    if (process.platform !== 'win32' && process.platform !== 'darwin') {
+      console.error(
+        '\n[Mẹo Hướng Dẫn] Trên hệ điều hành này, bạn cần cài đặt Python 3 và thư viện ddddocr để tự động giải Captcha.\n' +
+        'Hãy chạy lệnh sau trong Terminal:\n' +
+        '  pip3 install ddddocr\n' +
+        'Hoặc:\n' +
+        '  pip install ddddocr\n'
+      );
+    }
     return null;
   }
 }
@@ -1342,8 +1364,15 @@ async function clickFirstAvailable(page, selectors) {
   for (const selector of selectors) {
     const locator = page.locator(selector).first();
     if (await locator.count().catch(() => 0)) {
-      await locator.click({ timeout: 3_000 });
-      return true;
+      // Click cưỡng bức bỏ qua mọi actionability checks của Playwright
+      const clicked = await locator.click({ timeout: 1500, force: true }).then(() => true).catch(async () => {
+        // Fallback gọi evaluate click trực tiếp trên browser
+        return await locator.evaluate((el) => {
+          el.click();
+          return true;
+        }).catch(() => false);
+      });
+      if (clicked) return true;
     }
   }
   return false;

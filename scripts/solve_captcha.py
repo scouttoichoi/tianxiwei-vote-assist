@@ -17,8 +17,8 @@ def main():
         ocr = ddddocr.DdddOcr(show_ad=False)
         
         # 2. KHÓA TẬP KÝ TỰ (Whitelist)
-        # Chỉ cho phép AI trả về số từ 0-9 và chữ cái A-Z, a-z
-        ocr.set_ranges("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        # Chỉ cho phép AI trả về số từ 0-9 và chữ cái A-Z
+        ocr.set_ranges("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
         
         # 3. Đọc và giải mã ảnh
         with open(image_path, 'rb') as f:
