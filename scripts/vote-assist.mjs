@@ -1490,7 +1490,7 @@ async function completeFavoriteVote(page) {
     await popupVotingButton.waitFor({ state: 'visible', timeout: 10_000 });
     await popupVotingButton.click({ timeout: 10_000 });
 
-    await page.waitForTimeout(2_000);
+    await page.waitForTimeout(5_000);
     console.log('Đã bấm Use All và VOTING trong popup.');
     return true;
   } catch (error) {
