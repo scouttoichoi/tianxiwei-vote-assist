@@ -102,8 +102,10 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Hàm xóa quảng cáo che khuất và phục hồi scroll
 async function removeAdOverlay(page) {
   await page.evaluate(() => {
-    // Xóa hộp thoại Monetization Ads và Funding Choices cản trở nhấp chuột
-    const overlays = document.querySelectorAll('.fc-monetization-dialog-container, .fc-dialog-container, div[class*="monetization"]');
+    // Xóa hộp thoại Monetization Ads, Funding Choices và Google Ads cản trở nhấp chuột
+    const overlays = document.querySelectorAll(
+      '.fc-monetization-dialog-container, .fc-dialog-container, div[class*="monetization"], [id*="google_ads_iframe"], [class*="google_ads_iframe"]'
+    );
     let removedCount = 0;
     for (const el of overlays) {
       el.remove();
