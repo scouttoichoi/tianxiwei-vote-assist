@@ -899,13 +899,26 @@ function parseVotedToday(value) {
   return null;
 }
 
-function randomImportedNickname(email) {
+function randomAlphanumericNickname(length = 12) {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = 'AL';
-  for (let i = 0; i < 10; i++) {
+  let result = '';
+  for (let i = 0; i < length; i += 1) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
+}
+
+function sanitizeNickname(rawNickname, fallbackLength = 12) {
+  const candidate = String(rawNickname || '').trim();
+  const exactPattern = new RegExp(`^[a-zA-Z0-9]{${fallbackLength}}$`);
+  if (exactPattern.test(candidate)) {
+    return candidate;
+  }
+  return randomAlphanumericNickname(fallbackLength);
+}
+
+function randomImportedNickname() {
+  return randomAlphanumericNickname(12);
 }
 
 function importedAccountFromRow(row, importedAt) {
@@ -947,7 +960,7 @@ function importedAccountFromRow(row, importedAt) {
     email,
     password,
     identificationEmail: '',
-    nickname: randomImportedNickname(email),
+    nickname: sanitizeNickname(randomImportedNickname()),
     dob: '',
     createdAt: importedAt.toISOString(),
     lastVotedAt,
@@ -980,7 +993,6 @@ function importedAliasFromRow(row, importedAt) {
     email,
     password: '',
     identificationEmail: '',
-    nickname: randomImportedNickname(email),
     dob: '',
     createdAt: importedAt.toISOString(),
     lastVotedAt: null,

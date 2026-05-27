@@ -389,7 +389,7 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
     if (isAliasMode) {
       state.email = options.aliasAccount.email;
       state.identificationEmail = randomIdentificationEmail(state.email);
-      state.nickname = options.aliasAccount.nickname || randomNickname();
+      state.nickname = randomNickname();
       console.log(`Alias mail: ${state.email}`);
     } else {
       tempMailProvider = pickTempMailProvider(config);
@@ -2099,7 +2099,14 @@ async function loadAccounts() {
     const content = await fs.readFile(ACCOUNTS_PATH, 'utf8');
     if (!content.trim()) return [];
     const accounts = JSON.parse(content);
-    return Array.isArray(accounts) ? accounts : [];
+    if (!Array.isArray(accounts)) return [];
+    return accounts.map((account) => {
+      if ((account?.status || '').toLowerCase() !== 'not-register') {
+        return account;
+      }
+      const { nickname, ...rest } = account;
+      return rest;
+    });
   } catch (error) {
     if (error.code === 'ENOENT') {
       return [];
@@ -2129,7 +2136,7 @@ async function saveAccount(state) {
     email: state.email,
     password: PASSWORD,
     identificationEmail: state.identificationEmail,
-    nickname: state.nickname,
+    nickname: sanitizeNickname(state.nickname),
     dob: state.dob,
     createdAt: state.startedAt,
     lastVotedAt: state.lastVotedAt,
@@ -2196,13 +2203,22 @@ function pickTempMailProvider(config) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function randomNickname() {
+function randomNickname(length = 12) {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = 'DH';
-  for (let i = 0; i < 10; i++) {
+  let result = '';
+  for (let i = 0; i < length; i += 1) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
+}
+
+function sanitizeNickname(rawNickname, fallbackLength = 12) {
+  const candidate = String(rawNickname || '').trim();
+  const exactPattern = new RegExp(`^[a-zA-Z0-9]{${fallbackLength}}$`);
+  if (exactPattern.test(candidate)) {
+    return candidate;
+  }
+  return randomNickname(fallbackLength);
 }
 
 function randomAdultDob() {
