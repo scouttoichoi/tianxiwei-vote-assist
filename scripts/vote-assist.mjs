@@ -36,31 +36,31 @@ const TEMP_MAIL_PROVIDERS = [
       '[aria-label*="refresh" i]'
     ]
   },
-  {
-    id: 'mail-tm',
-    label: 'mail.tm',
-    url: 'https://mail.tm/en/',
-    rotateSelectors: [
-      'button:has-text("Create an account")',
-      'button:has-text("Delete account")',
-      'text=Create an account',
-      'text=Delete account'
-    ],
-    refreshSelectors: [
-      'button:has-text("Refresh")',
-      'a:has-text("Refresh")',
-      'text=Refresh'
-    ],
-    emailSelectors: [
-      'input[type="email"][readonly]',
-      'input[readonly][value*="@"]',
-      '[data-grace-area-trigger] input[value*="@"]'
-    ],
-    inboxRowSelectors: [
-      'div.mt-6 ul > li > a[href*="/view/"]',
-      'div.mt-6 a[href*="/view/"]'
-    ]
-  }
+  // {
+  //   id: 'mail-tm',
+  //   label: 'mail.tm',
+  //   url: 'https://mail.tm/en/',
+  //   rotateSelectors: [
+  //     'button:has-text("Create an account")',
+  //     'button:has-text("Delete account")',
+  //     'text=Create an account',
+  //     'text=Delete account'
+  //   ],
+  //   refreshSelectors: [
+  //     'button:has-text("Refresh")',
+  //     'a:has-text("Refresh")',
+  //     'text=Refresh'
+  //   ],
+  //   emailSelectors: [
+  //     'input[type="email"][readonly]',
+  //     'input[readonly][value*="@"]',
+  //     '[data-grace-area-trigger] input[value*="@"]'
+  //   ],
+  //   inboxRowSelectors: [
+  //     'div.mt-6 ul > li > a[href*="/view/"]',
+  //     'div.mt-6 a[href*="/view/"]'
+  //   ]
+  // }
 ];
 const BUGS_SIGNUP_URL = 'https://secure.bugs.co.kr/member/join/foreignerMemberMain';
 const BUGS_LOGIN_URL = 'https://music.bugs.co.kr/member/loginview';
