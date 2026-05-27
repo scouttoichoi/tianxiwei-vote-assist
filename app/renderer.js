@@ -68,6 +68,7 @@ const confirmEmulatorDialog = document.getElementById('confirmEmulatorDialog');
 const addInstanceButton = document.getElementById('addInstanceButton');
 const runAllSignupButton = document.getElementById('runAllSignupButton');
 const runAllSignupManualButton = document.getElementById('runAllSignupManualButton');
+const runAllSignupAliasButton = document.getElementById('runAllSignupAliasButton');
 const runAllLoginButton = document.getElementById('runAllLoginButton');
 const stopAllButton = document.getElementById('stopAllButton');
 
@@ -633,62 +634,102 @@ function requestSignupCount(isAlias = false) {
   });
 }
 
+async function instanceHasNotRegisterAccounts(instanceId) {
+  const accounts = await window.txw.getInstanceAccounts(instanceId);
+  return accounts.some((account) => (account?.status || '').toLowerCase() === 'not-register');
+}
+
 // Show Vote Account Tables
 async function showAccounts() {
   if (!selectedInstanceId) return;
 
   const accounts = await window.txw.getInstanceAccounts(selectedInstanceId);
-  const activeAccounts = accounts.filter((account) => {
-    const s = (account.status || 'active').toLowerCase();
-    return s !== 'deactive' && s !== 'not-register';
-  });
-  const notRegisterAccounts = accounts.filter((account) => (account.status || '').toLowerCase() === 'not-register');
-  const deactiveAccounts = accounts.filter((account) => (account.status || '').toLowerCase() === 'deactive');
   const totalVotes = accounts.reduce((sum, account) => sum + normalizeVoteCount(account.lastVoteCount), 0);
+  const groupedAccounts = {
+    active: accounts.filter((account) => {
+      const s = (account.status || 'active').toLowerCase();
+      return s !== 'deactive' && s !== 'not-register';
+    }),
+    notRegister: accounts.filter((account) => (account.status || '').toLowerCase() === 'not-register'),
+    deactive: accounts.filter((account) => (account.status || '').toLowerCase() === 'deactive')
+  };
 
-  const renderRows = (items, tabType) => items.map((account) => `
-    <tr>
-      <td>${account.email || '-'}</td>
-      <td>${account.password || '-'}</td>
-      <td>${formatDateTime(account.lastVotedAt)}</td>
-      <td>${numberFormat.format(normalizeVoteCount(account.lastVoteCount))}</td>
-      <td>${account.lastError || ''}</td>
-      <td>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          ${tabType === 'active' ? `
-            <button
-              type="button"
-              class="miniButton"
-              data-mark-voted-email="${account.email || ''}"
-            >
-              ${t('markVotedToday')}
-            </button>
-            <button
-              type="button"
-              class="miniButton"
-              style="background: linear-gradient(135deg, #d32f2f, #f44336); border: none;"
-              data-toggle-status-email="${account.email || ''}"
-              data-new-status="deactive"
-            >
-              ${t('deactivateAccount')}
-            </button>
-          ` : tabType === 'deactive' ? `
-            <button
-              type="button"
-              class="miniButton"
-              style="background: linear-gradient(135deg, #2e7d32, #4caf50); border: none;"
-              data-toggle-status-email="${account.email || ''}"
-              data-new-status="active"
-            >
-              ${t('activateAccount')}
-            </button>
-          ` : `
-            -
-          `}
-        </div>
-      </td>
-    </tr>
-  `).join('');
+  const tabEmptyKeys = {
+    active: 'noActiveAccounts',
+    notRegister: 'noNotRegisterAccounts',
+    deactive: 'noDeactiveAccounts'
+  };
+
+  const activeTabState = modalBody.querySelector('[data-tab-trigger].is-active')?.dataset.tabTrigger || 'active';
+  const previousSearch = modalBody.querySelector('[data-account-search]')?.value || '';
+
+  const getActionDescriptors = (tabType, account) => {
+    const email = account.email || '';
+    if (tabType === 'active') {
+      return [
+        { type: 'mark', icon: '✓', title: t('markVotedToday'), email },
+        { type: 'toggle', icon: '⏸', title: t('deactivateAccount'), email, newStatus: 'deactive', tone: 'danger' },
+        { type: 'toggle', icon: '↺', title: t('moveToNotRegister'), email, newStatus: 'not-register', tone: 'muted' }
+      ];
+    }
+    if (tabType === 'deactive') {
+      return [
+        { type: 'toggle', icon: '▶', title: t('activateAccount'), email, newStatus: 'active', tone: 'success' },
+        { type: 'toggle', icon: '↺', title: t('moveToNotRegister'), email, newStatus: 'not-register', tone: 'muted' }
+      ];
+    }
+    return [];
+  };
+
+  const renderActionButton = (action) => {
+    const sharedAttrs = [
+      `type="button"`,
+      `class="accountActionBtn${action.tone ? ` is-${action.tone}` : ''}"`,
+      `title="${action.title}"`,
+      `aria-label="${action.title}"`,
+      `data-action-title="${action.title}"`
+    ];
+
+    if (action.type === 'mark') {
+      sharedAttrs.push(`data-mark-voted-email="${action.email}"`);
+    } else {
+      sharedAttrs.push(`data-toggle-status-email="${action.email}"`);
+      sharedAttrs.push(`data-new-status="${action.newStatus}"`);
+    }
+
+    return `<button ${sharedAttrs.join(' ')}><span aria-hidden="true">${action.icon}</span></button>`;
+  };
+
+  const renderRows = (items, tabType, searchValue = '') => {
+    const keyword = searchValue.trim().toLowerCase();
+    const filtered = !keyword
+      ? items
+      : items.filter((account) =>
+        [account.email, account.password, account.lastError]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(keyword))
+      );
+
+    if (!filtered.length) {
+      const emptyKey = keyword ? 'noSearchResults' : tabEmptyKeys[tabType];
+      return `<tr><td colspan="6">${t(emptyKey)}</td></tr>`;
+    }
+
+    return filtered.map((account) => `
+      <tr>
+        <td>${account.email || '-'}</td>
+        <td>${account.password || '-'}</td>
+        <td>${formatDateTime(account.lastVotedAt)}</td>
+        <td>${numberFormat.format(normalizeVoteCount(account.lastVoteCount))}</td>
+        <td>${account.lastError || ''}</td>
+        <td>
+          <div class="accountActions">
+            ${getActionDescriptors(tabType, account).map(renderActionButton).join('') || '<span class="accountActionEmpty">-</span>'}
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  };
 
   openModal(t('accountsTitle'), `
     <div class="accountsSummary" style="grid-template-columns: repeat(5, minmax(0, 1fr));">
@@ -698,15 +739,15 @@ async function showAccounts() {
       </div>
       <div class="accountsSummaryCard">
         <span>${t('active')}</span>
-        <strong>${numberFormat.format(activeAccounts.length)}</strong>
+        <strong>${numberFormat.format(groupedAccounts.active.length)}</strong>
       </div>
       <div class="accountsSummaryCard">
         <span>${t('notRegister')}</span>
-        <strong>${numberFormat.format(notRegisterAccounts.length)}</strong>
+        <strong>${numberFormat.format(groupedAccounts.notRegister.length)}</strong>
       </div>
       <div class="accountsSummaryCard">
         <span>${t('deactive')}</span>
-        <strong>${numberFormat.format(deactiveAccounts.length)}</strong>
+        <strong>${numberFormat.format(groupedAccounts.deactive.length)}</strong>
       </div>
       <div class="accountsSummaryCard">
         <span>${t('totalVotes')}</span>
@@ -714,13 +755,23 @@ async function showAccounts() {
       </div>
     </div>
 
+    <div class="accountsToolbar">
+      <input
+        type="search"
+        class="accountsSearchInput"
+        data-account-search
+        placeholder="${t('searchAccountsPlaceholder')}"
+        value="${previousSearch.replace(/"/g, '&quot;')}"
+      >
+    </div>
+
     <div class="accountsTabs" role="tablist" aria-label="Trạng thái tài khoản">
-      <button type="button" class="accountsTab is-active" data-tab-trigger="active">${t('active')} (${numberFormat.format(activeAccounts.length)})</button>
-      <button type="button" class="accountsTab" data-tab-trigger="notRegister">${t('notRegister')} (${numberFormat.format(notRegisterAccounts.length)})</button>
-      <button type="button" class="accountsTab" data-tab-trigger="deactive">${t('deactive')} (${numberFormat.format(deactiveAccounts.length)})</button>
+      <button type="button" class="accountsTab${activeTabState === 'active' ? ' is-active' : ''}" data-tab-trigger="active">${t('active')} (${numberFormat.format(groupedAccounts.active.length)})</button>
+      <button type="button" class="accountsTab${activeTabState === 'notRegister' ? ' is-active' : ''}" data-tab-trigger="notRegister">${t('notRegister')} (${numberFormat.format(groupedAccounts.notRegister.length)})</button>
+      <button type="button" class="accountsTab${activeTabState === 'deactive' ? ' is-active' : ''}" data-tab-trigger="deactive">${t('deactive')} (${numberFormat.format(groupedAccounts.deactive.length)})</button>
     </div>
 
-    <div class="accountsTabPanel is-active" data-tab-panel="active">
+    <div class="accountsTabPanel${activeTabState === 'active' ? ' is-active' : ''}" data-tab-panel="active">
       <table>
         <thead>
           <tr>
@@ -732,11 +783,11 @@ async function showAccounts() {
             <th>${t('actions')}</th>
           </tr>
         </thead>
-        <tbody>${renderRows(activeAccounts, 'active') || `<tr><td colspan="6">${t('noActiveAccounts')}</td></tr>`}</tbody>
+        <tbody>${renderRows(groupedAccounts.active, 'active', previousSearch)}</tbody>
       </table>
     </div>
 
-    <div class="accountsTabPanel" data-tab-panel="notRegister">
+    <div class="accountsTabPanel${activeTabState === 'notRegister' ? ' is-active' : ''}" data-tab-panel="notRegister">
       <table>
         <thead>
           <tr>
@@ -748,11 +799,11 @@ async function showAccounts() {
             <th>${t('actions')}</th>
           </tr>
         </thead>
-        <tbody>${renderRows(notRegisterAccounts, 'notRegister') || `<tr><td colspan="6">${t('noNotRegisterAccounts')}</td></tr>`}</tbody>
+        <tbody>${renderRows(groupedAccounts.notRegister, 'notRegister', previousSearch)}</tbody>
       </table>
     </div>
 
-    <div class="accountsTabPanel" data-tab-panel="deactive">
+    <div class="accountsTabPanel${activeTabState === 'deactive' ? ' is-active' : ''}" data-tab-panel="deactive">
       <table>
         <thead>
           <tr>
@@ -764,11 +815,12 @@ async function showAccounts() {
             <th>${t('actions')}</th>
           </tr>
         </thead>
-        <tbody>${renderRows(deactiveAccounts, 'deactive') || `<tr><td colspan="6">${t('noDeactiveAccounts')}</td></tr>`}</tbody>
+        <tbody>${renderRows(groupedAccounts.deactive, 'deactive', previousSearch)}</tbody>
       </table>
     </div>
   `);
 
+  const searchInput = modalBody.querySelector('[data-account-search]');
   const triggers = [...modalBody.querySelectorAll('[data-tab-trigger]')];
   const panels = [...modalBody.querySelectorAll('[data-tab-panel]')];
   const markButtons = [...modalBody.querySelectorAll('[data-mark-voted-email]')];
@@ -786,6 +838,17 @@ async function showAccounts() {
   for (const trigger of triggers) {
     trigger.addEventListener('click', () => activateTab(trigger.dataset.tabTrigger));
   }
+
+  searchInput?.addEventListener('input', async () => {
+    await showAccounts();
+    const nextInput = modalBody.querySelector('[data-account-search]');
+    if (nextInput) {
+      nextInput.focus();
+      const nextValue = searchInput.value;
+      nextInput.value = nextValue;
+      nextInput.setSelectionRange(nextValue.length, nextValue.length);
+    }
+  });
 
   for (const button of markButtons) {
     button.addEventListener('click', async () => {
@@ -822,13 +885,15 @@ async function showAccounts() {
       const newStatus = button.dataset.newStatus;
       const confirmMsg = newStatus === 'active'
         ? t('confirmActivateAccount').replace('{email}', email)
-        : t('confirmDeactivateAccount').replace('{email}', email);
+        : newStatus === 'not-register'
+          ? t('confirmMoveToNotRegister').replace('{email}', email)
+          : t('confirmDeactivateAccount').replace('{email}', email);
 
       const ok = window.confirm(confirmMsg);
       if (!ok) return;
 
       button.disabled = true;
-      button.textContent = '...';
+      button.innerHTML = '<span aria-hidden="true">…</span>';
 
       try {
         await window.txw.toggleInstanceAccountStatus(selectedInstanceId, email, newStatus);
@@ -836,7 +901,11 @@ async function showAccounts() {
         await showAccounts();
       } catch (error) {
         button.disabled = false;
-        button.textContent = newStatus === 'active' ? t('activateAccount') : t('deactivateAccount');
+        button.title = newStatus === 'active'
+          ? t('activateAccount')
+          : newStatus === 'not-register'
+            ? t('moveToNotRegister')
+            : t('deactivateAccount');
         window.alert(error.message || error);
       }
     });
@@ -1696,6 +1765,40 @@ runAllSignupManualButton.addEventListener('click', async () => {
       await refreshInstances();
       await new Promise((resolve) => setTimeout(resolve, 8000));
     }
+  }
+});
+
+runAllSignupAliasButton.addEventListener('click', async () => {
+  const count = await requestSignupCount(true);
+  if (count === null) return;
+
+  if (!Number.isInteger(count) || count < 1) {
+    openModal(t('invalidCountTitle'), `<p>${t('invalidCountMessage')}</p>`);
+    return;
+  }
+
+  const snapshot = [...instances];
+  let started = 0;
+
+  for (const inst of snapshot) {
+    const latest = instances.find((item) => item.id === inst.id) || inst;
+    if (latest.running) {
+      continue;
+    }
+
+    const hasNotRegisterAccounts = await instanceHasNotRegisterAccounts(inst.id);
+    if (!hasNotRegisterAccounts) {
+      continue;
+    }
+
+    await startInstanceProcess(inst.id, 'signup-alias', { count }, false);
+    started += 1;
+    await refreshInstances();
+    await new Promise((resolve) => setTimeout(resolve, 8000));
+  }
+
+  if (started === 0) {
+    openModal(t('noNotRegisterAccountsTitle'), `<p>${t('noNotRegisterAccountsMessage')}</p>`);
   }
 });
 
