@@ -36,6 +36,29 @@ const TEMP_MAIL_PROVIDERS = [
       '[aria-label*="refresh" i]'
     ]
   },
+  {
+    id: 'tempmail-ing',
+    label: 'tempmail.ing',
+    url: 'https://tempmail.ing/',
+    rotateSelectors: [
+      '#generateBtn',
+      'button:has-text("Change Address")',
+      'text=Change Address'
+    ],
+    refreshSelectors: [
+      '#manualRefreshBtn',
+      'button:has-text("Refresh")',
+      'text=Refresh'
+    ],
+    emailSelectors: [
+      'input#currentEmail',
+      '#currentEmail'
+    ],
+    inboxRowSelectors: [
+      '#emailsList .email-item',
+      '.email-item'
+    ]
+  },
   // {
   //   id: 'mail-tm',
   //   label: 'mail.tm',
@@ -1593,8 +1616,8 @@ async function verifyEmail(tempPage, provider = TEMP_MAIL_PROVIDERS[0], config =
     await clickFirstAvailable(tempPage, provider.refreshSelectors).catch(() => { });
     await sleep(2_000);
 
-    const opened = provider.id === 'mail-tm'
-      ? await openMailTmVerificationEmail(tempPage, provider)
+    const opened = (provider.id === 'mail-tm' || provider.id === 'tempmail-ing')
+      ? await openInboxRowVerificationEmail(tempPage, provider)
       : await openGenericVerificationEmail(tempPage);
 
     if (opened) {
