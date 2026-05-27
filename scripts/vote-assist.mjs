@@ -293,18 +293,18 @@ async function cleanupCaptchaImages() {
 async function main() {
   const command = process.argv[2] ?? 'signup';
   const config = await loadConfig();
-  if (command === 'signup') {
-    await runSignupCommand(config);
+  if (command === 'signup' || command === 'signup-alias') {
+    await runSignupCommand(config, command === 'signup-alias');
     return;
   }
   if (command === 'login') {
     await runLoginCommand(config);
     return;
   }
-  throw new Error(`Lệnh không hợp lệ: ${command}. Dùng "signup" hoặc "login".`);
+  throw new Error(`Lệnh không hợp lệ: ${command}. Dùng "signup", "signup-alias" hoặc "login".`);
 }
 
-async function runSignupCommand(config) {
+async function runSignupCommand(config, isAliasMode = false) {
   await cleanupCaptchaImages();
 
   const totalRuns = Number(process.argv[3] ?? config.signupRuns ?? 1);
@@ -319,16 +319,46 @@ async function runSignupCommand(config) {
 
     for (let runIndex = 1; runIndex <= totalRuns; runIndex += 1) {
       await cleanupCaptchaImages();
-      console.log(`\nBắt đầu signup-vote lượt ${runIndex}/${totalRuns}`);
-      const ok = await runSingleSignupAndVote(browserApi, config, { manualCaptcha }).catch(async (error) => {
-        console.warn(`Lỗi signup-vote lượt ${runIndex}: ${error.message}`);
-        await appendLog({ status: 'signup-failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => { });
+
+      let aliasAccount = null;
+      if (isAliasMode) {
+        const accounts = await loadAccounts();
+        const notRegisterAccounts = accounts.filter(acc => (acc.status || '').toLowerCase() === 'not-register');
+        if (notRegisterAccounts.length === 0) {
+          console.log('\n❌ Không còn tài khoản Chưa đăng ký (Gmail aliases) nào trong danh sách. Tiến trình dừng lại.');
+          break;
+        }
+        aliasAccount = notRegisterAccounts[0];
+        console.log(`\nBắt đầu signup-alias [${aliasAccount.email}] lượt ${runIndex}/${totalRuns}`);
+      } else {
+        console.log(`\nBắt đầu signup-vote lượt ${runIndex}/${totalRuns}`);
+      }
+
+      const ok = await runSingleSignupAndVote(browserApi, config, { 
+        manualCaptcha, 
+        isAliasMode, 
+        aliasAccount 
+      }).catch(async (error) => {
+        if (isAliasMode) {
+          console.warn(`Lỗi signup-alias lượt ${runIndex}: ${error.message}`);
+          if (aliasAccount) {
+            const accounts = await loadAccounts();
+            const existing = accounts.find(acc => acc.email === aliasAccount.email);
+            if (existing) {
+              existing.lastError = error.message;
+              await saveAccounts(accounts);
+            }
+          }
+        } else {
+          console.warn(`Lỗi signup-vote lượt ${runIndex}: ${error.message}`);
+          await appendLog({ status: 'signup-failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => { });
+        }
         return false;
       });
       completed += ok ? 1 : 0;
     }
 
-    console.log(`Hoàn tất signup-vote: ${completed}/${totalRuns} lượt.`);
+    console.log(`Hoàn tất signup: ${completed}/${totalRuns} lượt.`);
   } finally {
     // Luôn đóng tiến trình giải captcha ngầm sạch sẽ
     stopCaptchaSolver();
@@ -352,22 +382,35 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
   };
 
   try {
-    const tempMailProvider = pickTempMailProvider(config);
-    state.tempMailProvider = tempMailProvider.id;
-    console.log(`Temp mail provider lượt này: ${tempMailProvider.label}`);
+    const isAliasMode = options.isAliasMode === true;
+    let tempPage = null;
+    let tempMailProvider = null;
 
-    const tempPage = await context.newPage();
-    await tempPage.goto(tempMailProvider.url, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-    if (config.randomizeTempMail === true) {
-      await randomizeTempMail(tempPage, tempMailProvider);
+    if (isAliasMode) {
+      state.email = options.aliasAccount.email;
+      state.identificationEmail = randomIdentificationEmail(state.email);
+      state.nickname = options.aliasAccount.nickname || randomNickname();
+      console.log(`Alias mail: ${state.email}`);
+    } else {
+      tempMailProvider = pickTempMailProvider(config);
+      state.tempMailProvider = tempMailProvider.id;
+      console.log(`Temp mail provider lượt này: ${tempMailProvider.label}`);
+
+      tempPage = await context.newPage();
+      await tempPage.goto(tempMailProvider.url, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+      if (config.randomizeTempMail === true) {
+        await randomizeTempMail(tempPage, tempMailProvider);
+      }
+      state.email = await getTempMailAddress(tempPage, tempMailProvider);
+      state.identificationEmail = randomIdentificationEmail(state.email);
+      state.nickname = randomNickname();
+      console.log(`Temp mail: ${state.email}`);
     }
-    state.email = await getTempMailAddress(tempPage, tempMailProvider);
-    state.identificationEmail = randomIdentificationEmail(state.email);
-    state.nickname = randomNickname();
-    console.log(`Temp mail: ${state.email}`);
 
     let isDomainBlocked = false;
     let blockedDomainName = '';
+    let isSignupError = false;
+    let signupErrorMessage = '';
 
     const signupPage = await context.newPage();
     signupPage.on('dialog', async (dialog) => {
@@ -380,6 +423,13 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
           blockedDomainName = emailParts[1];
         }
       }
+      
+      // Bẫy lỗi đăng ký khác ví dụ lỗi 1:1 inquiry hoặc tài khoản đã tồn tại
+      if (msg.includes('1:1') || msg.includes('inquiry') || msg.includes('문의') || msg.includes('already') || msg.includes('등록') || msg.includes('가입')) {
+        isSignupError = true;
+        signupErrorMessage = msg;
+      }
+
       await dialog.dismiss();
     });
     await signupPage.goto(BUGS_SIGNUP_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
@@ -463,7 +513,7 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
             break;
           }
 
-          if (isDomainBlocked) {
+          if (isDomainBlocked || isSignupError) {
             break;
           }
         }
@@ -479,6 +529,10 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
             BLOCKED_TEMP_MAIL_DOMAINS.add(blockedDomainName);
             throw new Error(`EMAIL_DOMAIN_BLOCKED: ${blockedDomainName}`);
           }
+          if (isSignupError) {
+            console.error(`❌ [SIGNUP ERROR] Lỗi đăng ký từ Bugs: [${signupErrorMessage}]`);
+            throw new Error(`SIGNUP_ERROR: ${signupErrorMessage}`);
+          }
 
           // Nếu web báo sai Captcha -> Bấm Refresh để tải ảnh mới và thử lại
           console.warn(`[Lần ${attempt}] Đăng ký chưa thành công (Đoán sai Captcha hoặc hết hạn session). Tổng thời gian đã mất: ${totalAttemptDuration}ms. Thử lại...`);
@@ -489,7 +543,17 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
     }
     //
 
-    //
+    // Nếu chạy ở chế độ Alias, giải xong captcha có thông báo mail gửi về là ngừng tiến trình lập tức
+    if (isAliasMode) {
+      state.status = 'active';
+      state.lastVotedAt = '';
+      state.lastVoteCount = 0;
+      await saveAccount(state);
+      await appendLog({ ...state, completedAt: new Date().toISOString(), status: 'completed-alias' });
+      console.log(`Hoàn tất đăng ký alias cho [${state.email}]. Đã cập nhật trạng thái hoạt động (Active).`);
+      return true;
+    }
+
     if (config.autoFocusBrowser !== false) {
       await tempPage.bringToFront().catch(() => { });
     }
@@ -1747,7 +1811,7 @@ async function clickConfirmAfterAuth(page) {
 async function prepareFavoritePage(page) {
   await page.waitForLoadState('domcontentloaded');
   await page.locator('text=/ENG/i').first().click().catch(() => { });
-  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote[data-candidate-id="11046"]').first();
+  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote').first();
   if (await voteButton.count().catch(() => 0)) {
     await voteButton.scrollIntoViewIfNeeded();
     await voteButton.highlight().catch(() => { });
@@ -1770,7 +1834,7 @@ async function isVoteLoginRequired(page) {
 }
 
 async function hasFavoriteCandidate(page) {
-  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote[data-candidate-id="11046"]').first();
+  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote').first();
   if (await voteButton.count().catch(() => 0)) {
     return true;
   }
@@ -1913,7 +1977,7 @@ function csvValue(value) {
 async function completeFavoriteVote(page, voteState) {
   const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
   const voteButton = candidate
-    .locator('button.btnVote[data-action="vote_candidate"][data-candidate-id="11046"]')
+    .locator('button.btnVote[data-action="vote_candidate"]')
     .first();
 
   try {

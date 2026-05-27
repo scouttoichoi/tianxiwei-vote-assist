@@ -953,6 +953,39 @@ function importedAccountFromRow(row, importedAt) {
   };
 }
 
+function importedAliasFromRow(row, importedAt) {
+  const normalized = {};
+  for (const [key, value] of Object.entries(row)) {
+    normalized[normalizeHeader(key)] = value;
+  }
+
+  const email = String(
+    normalized.user ||
+    normalized.email ||
+    normalized.username ||
+    normalized.email_alias ||
+    normalized.alias ||
+    ''
+  ).trim();
+
+  if (!email || !email.includes('@')) {
+    return null;
+  }
+
+  return {
+    email,
+    password: '',
+    identificationEmail: '',
+    nickname: randomImportedNickname(email),
+    dob: '',
+    createdAt: importedAt.toISOString(),
+    lastVotedAt: null,
+    lastVoteCount: 0,
+    status: 'not-register',
+    lastError: ''
+  };
+}
+
 function koreaDateKey(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -1009,7 +1042,7 @@ ipcMain.handle('instances:list', async () => {
     const accounts = await readAccounts(inst.id);
     const summary = await readScoreSummary(inst.id);
 
-    const activeAccounts = accounts.filter(acc => !['disabled', 'deactive'].includes(acc.status));
+    const activeAccounts = accounts.filter(acc => !['disabled', 'deactive', 'not-register'].includes(acc.status));
     const votedTodayCount = activeAccounts.filter(acc => hasVotedTodayKorea(acc.lastVotedAt)).length;
 
     return {
@@ -1135,7 +1168,8 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
   let command = 'signup';
   if (mode === 'login') command = 'login';
   else if (mode === 'ads') command = 'ads';
-  const uiMode = mode === 'signup-manual' ? 'signup-manual' : command;
+  else if (mode === 'signup-alias') command = 'signup-alias';
+  const uiMode = mode === 'signup-manual' ? 'signup-manual' : (mode === 'signup-alias-manual' ? 'signup-alias-manual' : (mode === 'signup-alias' ? 'signup-alias' : command));
 
   const adbDeviceId = command === 'ads' ? String(options.emulatorDevice || '').trim() : '';
   let adbDeviceLocks = [];
@@ -1174,9 +1208,9 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
   }
 
   const runnerArgs = [command];
-  if (command === 'signup' && options.count) {
+  if ((command === 'signup' || command === 'signup-alias') && options.count) {
     runnerArgs.push(String(options.count));
-    if (options.manualCaptcha || mode === 'signup-manual') {
+    if (options.manualCaptcha || mode === 'signup-manual' || mode === 'signup-alias-manual') {
       runnerArgs.push('manual-captcha');
     }
   } else if (command === 'ads') {
@@ -1280,7 +1314,7 @@ ipcMain.handle('instances:stop-all', async () => {
 ipcMain.handle('instances:get-summary', async (_event, instanceId) => readScoreSummary(instanceId));
 ipcMain.handle('instances:get-accounts', async (_event, instanceId) => readAccounts(instanceId));
 
-ipcMain.handle('instances:import-accounts', async (_event, instanceId) => {
+ipcMain.handle('instances:import-accounts', async (_event, instanceId, importType = 'created') => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Import accounts from Excel',
     filters: [
@@ -1309,7 +1343,9 @@ ipcMain.handle('instances:import-accounts', async (_event, instanceId) => {
   const seenEmails = new Set();
 
   for (const row of rows) {
-    const nextAccount = importedAccountFromRow(row, importedAt);
+    const nextAccount = importType === 'uncreated'
+      ? importedAliasFromRow(row, importedAt)
+      : importedAccountFromRow(row, importedAt);
 
     if (!nextAccount) {
       skipped += 1;
@@ -1328,15 +1364,19 @@ ipcMain.handle('instances:import-accounts', async (_event, instanceId) => {
 
     if (existing) {
       duplicated += 1;
-      Object.assign(existing, {
-        ...existing,
-        password: nextAccount.password,
-        lastVotedAt: nextAccount.lastVotedAt,
-        lastVoteCount: existing.lastVoteCount || nextAccount.lastVoteCount,
-        status: 'active',
-        lastError: ''
-      });
-      updated += 1;
+      if (importType === 'uncreated') {
+        skipped += 1;
+      } else {
+        Object.assign(existing, {
+          ...existing,
+          password: nextAccount.password,
+          lastVotedAt: nextAccount.lastVotedAt,
+          lastVoteCount: existing.lastVoteCount || nextAccount.lastVoteCount,
+          status: 'active',
+          lastError: ''
+        });
+        updated += 1;
+      }
     } else {
       accounts.push(nextAccount);
       byEmail.set(key, nextAccount);

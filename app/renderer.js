@@ -35,6 +35,7 @@ const closeInstanceFormDialog = document.getElementById('closeInstanceFormDialog
 // Action Buttons
 const signupButton = document.getElementById('signupButton');
 const signupManualButton = document.getElementById('signupManualButton');
+const signupAliasButton = document.getElementById('signupAliasButton');
 const loginButton = document.getElementById('loginButton');
 const adsButton = document.getElementById('adsButton');
 const accountsButton = document.getElementById('accountsButton');
@@ -45,6 +46,11 @@ const historyButton = document.getElementById('historyButton');
 const helpButtonMain = document.getElementById('helpButtonMain');
 const helpButton = document.getElementById('helpButton');
 const farmAdsGuideButton = document.getElementById('farmAdsGuideButton');
+
+// Import Choice Dialog
+const importChoiceDialog = document.getElementById('importChoiceDialog');
+const closeImportChoiceDialog = document.getElementById('closeImportChoiceDialog');
+const confirmImportChoiceDialog = document.getElementById('confirmImportChoiceDialog');
 
 // Emulator Choice DOMs
 const emulatorDialog = document.getElementById('emulatorDialog');
@@ -327,6 +333,7 @@ async function updateSelectedInstanceDashboard(inst) {
     // Vô hiệu hóa các nút khác, chuyển nút đang chạy thành nút Dừng
     signupButton.disabled = inst.runningMode !== 'signup';
     signupManualButton.disabled = inst.runningMode !== 'signup-manual';
+    signupAliasButton.disabled = inst.runningMode !== 'signup-alias';
     loginButton.disabled = inst.runningMode !== 'login';
     adsButton.disabled = inst.runningMode !== 'ads';
 
@@ -336,6 +343,9 @@ async function updateSelectedInstanceDashboard(inst) {
     } else if (inst.runningMode === 'signup-manual') {
       signupManualButton.innerHTML = `<span>${t('stopSignupManual')}</span><small>${t('stopSignupManualHint')}</small>`;
       signupManualButton.classList.add('btnDashboardStop');
+    } else if (inst.runningMode === 'signup-alias') {
+      signupAliasButton.innerHTML = `<span>${t('stopSignupAlias')}</span><small>${t('stopSignupAliasHint')}</small>`;
+      signupAliasButton.classList.add('btnDashboardStop');
     } else if (inst.runningMode === 'login') {
       loginButton.innerHTML = `<span>${t('stopLogin')}</span><small>${t('stopLoginHint')}</small>`;
       loginButton.classList.add('btnDashboardStop');
@@ -347,16 +357,19 @@ async function updateSelectedInstanceDashboard(inst) {
     // Trở lại trạng thái bình thường
     signupButton.disabled = false;
     signupManualButton.disabled = false;
+    signupAliasButton.disabled = false;
     loginButton.disabled = false;
     adsButton.disabled = false;
 
     signupButton.classList.remove('btnDashboardStop');
     signupManualButton.classList.remove('btnDashboardStop');
+    signupAliasButton.classList.remove('btnDashboardStop');
     loginButton.classList.remove('btnDashboardStop');
     adsButton.classList.remove('btnDashboardStop');
 
     signupButton.innerHTML = `<span>${t('signup')}</span><small>${t('signupHint')}</small>`;
     signupManualButton.innerHTML = `<span>${t('signupManual')}</span><small>${t('signupManualHint')}</small>`;
+    signupAliasButton.innerHTML = `<span>${t('signupAlias')}</span><small>${t('signupAliasHint')}</small>`;
     loginButton.innerHTML = `<span>${t('loginVote')}</span><small>${t('loginVoteHint')}</small>`;
     adsButton.innerHTML = `<span>${t('farmAds')}</span><small>${t('farmAdsHint')}</small>`;
   }
@@ -423,8 +436,9 @@ async function saveInstanceForm() {
 async function startInstanceProcess(instanceId, mode, optionsOverride = null, autoSelect = true) {
   let options = optionsOverride || {};
 
-  if ((mode === 'signup' || mode === 'signup-manual') && !optionsOverride) {
-    const count = await requestSignupCount();
+  if ((mode === 'signup' || mode === 'signup-manual' || mode === 'signup-alias') && !optionsOverride) {
+    const isAlias = mode === 'signup-alias';
+    const count = await requestSignupCount(isAlias);
     if (count === null) return;
     if (!Number.isInteger(count) || count < 1) {
       openModal(t('invalidCountTitle'), `<p>${t('invalidCountMessage')}</p>`);
@@ -450,6 +464,8 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
     startLogText = t('runningAds');
   } else if (mode === 'signup-manual') {
     startLogText = t('runningSignupManual');
+  } else if (mode === 'signup-alias') {
+    startLogText = t('runningSignupAlias');
   } else {
     startLogText = t('runningSignup');
   }
@@ -510,6 +526,7 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
   if (selectedInstanceId === instanceId) {
     signupButton.disabled = mode !== 'signup';
     signupManualButton.disabled = mode !== 'signup-manual';
+    signupAliasButton.disabled = mode !== 'signup-alias';
     loginButton.disabled = mode !== 'login';
     adsButton.disabled = mode !== 'ads';
 
@@ -519,6 +536,9 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
     } else if (mode === 'signup-manual') {
       signupManualButton.innerHTML = `<span>${t('stopSignupManual')}</span><small>${t('stopSignupManualHint')}</small>`;
       signupManualButton.classList.add('btnDashboardStop');
+    } else if (mode === 'signup-alias') {
+      signupAliasButton.innerHTML = `<span>${t('stopSignupAlias')}</span><small>${t('stopSignupAliasHint')}</small>`;
+      signupAliasButton.classList.add('btnDashboardStop');
     } else if (mode === 'login') {
       loginButton.innerHTML = `<span>${t('stopLogin')}</span><small>${t('stopLoginHint')}</small>`;
       loginButton.classList.add('btnDashboardStop');
@@ -545,7 +565,15 @@ async function startInstanceProcess(instanceId, mode, optionsOverride = null, au
   }
 }
 
-function requestSignupCount() {
+function requestSignupCount(isAlias = false) {
+  const titleKey = isAlias ? 'signupAliasCountTitle' : 'signupCountTitle';
+  const questionKey = isAlias ? 'signupAliasCountQuestion' : 'signupCountQuestion';
+
+  const titleEl = countDialog.querySelector('.modalHeader strong');
+  const questionEl = countDialog.querySelector('#countDialogBody p');
+  if (titleEl) titleEl.textContent = t(titleKey);
+  if (questionEl) questionEl.textContent = t(questionKey);
+
   signupCountInput.value = '1';
   countDialog.showModal();
   signupCountInput.focus();
@@ -603,11 +631,15 @@ async function showAccounts() {
   if (!selectedInstanceId) return;
 
   const accounts = await window.txw.getInstanceAccounts(selectedInstanceId);
-  const activeAccounts = accounts.filter((account) => (account.status || 'active').toLowerCase() !== 'deactive');
+  const activeAccounts = accounts.filter((account) => {
+    const s = (account.status || 'active').toLowerCase();
+    return s !== 'deactive' && s !== 'not-register';
+  });
+  const notRegisterAccounts = accounts.filter((account) => (account.status || '').toLowerCase() === 'not-register');
   const deactiveAccounts = accounts.filter((account) => (account.status || '').toLowerCase() === 'deactive');
   const totalVotes = accounts.reduce((sum, account) => sum + normalizeVoteCount(account.lastVoteCount), 0);
 
-  const renderRows = (items, isActiveTab) => items.map((account) => `
+  const renderRows = (items, tabType) => items.map((account) => `
     <tr>
       <td>${account.email || '-'}</td>
       <td>${account.password || '-'}</td>
@@ -616,7 +648,7 @@ async function showAccounts() {
       <td>${account.lastError || ''}</td>
       <td>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          ${isActiveTab ? `
+          ${tabType === 'active' ? `
             <button
               type="button"
               class="miniButton"
@@ -633,6 +665,16 @@ async function showAccounts() {
             >
               ${t('deactivateAccount')}
             </button>
+          ` : tabType === 'deactive' ? `
+            <button
+              type="button"
+              class="miniButton"
+              style="background: linear-gradient(135deg, #2e7d32, #4caf50); border: none;"
+              data-toggle-status-email="${account.email || ''}"
+              data-new-status="active"
+            >
+              ${t('activateAccount')}
+            </button>
           ` : `
             <button
               type="button"
@@ -643,6 +685,15 @@ async function showAccounts() {
             >
               ${t('activateAccount')}
             </button>
+            <button
+              type="button"
+              class="miniButton"
+              style="background: linear-gradient(135deg, #d32f2f, #f44336); border: none;"
+              data-toggle-status-email="${account.email || ''}"
+              data-new-status="deactive"
+            >
+              ${t('deactivateAccount')}
+            </button>
           `}
         </div>
       </td>
@@ -650,7 +701,7 @@ async function showAccounts() {
   `).join('');
 
   openModal(t('accountsTitle'), `
-    <div class="accountsSummary">
+    <div class="accountsSummary" style="grid-template-columns: repeat(5, minmax(0, 1fr));">
       <div class="accountsSummaryCard">
         <span>${t('totalAccounts')}</span>
         <strong>${numberFormat.format(accounts.length)}</strong>
@@ -658,6 +709,10 @@ async function showAccounts() {
       <div class="accountsSummaryCard">
         <span>${t('active')}</span>
         <strong>${numberFormat.format(activeAccounts.length)}</strong>
+      </div>
+      <div class="accountsSummaryCard">
+        <span>${t('notRegister')}</span>
+        <strong>${numberFormat.format(notRegisterAccounts.length)}</strong>
       </div>
       <div class="accountsSummaryCard">
         <span>${t('deactive')}</span>
@@ -671,6 +726,7 @@ async function showAccounts() {
 
     <div class="accountsTabs" role="tablist" aria-label="Trạng thái tài khoản">
       <button type="button" class="accountsTab is-active" data-tab-trigger="active">${t('active')} (${numberFormat.format(activeAccounts.length)})</button>
+      <button type="button" class="accountsTab" data-tab-trigger="notRegister">${t('notRegister')} (${numberFormat.format(notRegisterAccounts.length)})</button>
       <button type="button" class="accountsTab" data-tab-trigger="deactive">${t('deactive')} (${numberFormat.format(deactiveAccounts.length)})</button>
     </div>
 
@@ -686,7 +742,23 @@ async function showAccounts() {
             <th>${t('actions')}</th>
           </tr>
         </thead>
-        <tbody>${renderRows(activeAccounts, true) || `<tr><td colspan="6">${t('noActiveAccounts')}</td></tr>`}</tbody>
+        <tbody>${renderRows(activeAccounts, 'active') || `<tr><td colspan="6">${t('noActiveAccounts')}</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <div class="accountsTabPanel" data-tab-panel="notRegister">
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>${t('password')}</th>
+            <th>${t('lastVote')}</th>
+            <th>${t('totalVotes')}</th>
+            <th>${t('error')}</th>
+            <th>${t('actions')}</th>
+          </tr>
+        </thead>
+        <tbody>${renderRows(notRegisterAccounts, 'notRegister') || `<tr><td colspan="6">${t('noNotRegisterAccounts')}</td></tr>`}</tbody>
       </table>
     </div>
 
@@ -702,7 +774,7 @@ async function showAccounts() {
             <th>${t('actions')}</th>
           </tr>
         </thead>
-        <tbody>${renderRows(deactiveAccounts, false) || `<tr><td colspan="6">${t('noDeactiveAccounts')}</td></tr>`}</tbody>
+        <tbody>${renderRows(deactiveAccounts, 'deactive') || `<tr><td colspan="6">${t('noDeactiveAccounts')}</td></tr>`}</tbody>
       </table>
     </div>
   `);
@@ -1411,6 +1483,25 @@ signupManualButton.addEventListener('click', async () => {
     startInstanceProcess(selectedInstanceId, 'signup-manual');
   }
 });
+signupAliasButton.addEventListener('click', async () => {
+  if (!selectedInstanceId) return;
+  appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Đăng Ký Gmail Aliases' được click! Lớp btnDashboardStop: ${signupAliasButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
+  if (signupAliasButton.classList.contains('btnDashboardStop')) {
+    signupAliasButton.disabled = true;
+    signupAliasButton.innerHTML = `<span>Đang dừng...</span><small>Vui lòng đợi giây lát</small>`;
+    appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Gửi lệnh dừng qua IPC...\n`);
+    try {
+      const res = await window.txw.stopInstance(selectedInstanceId);
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Kết quả IPC dừng: ${res}\n`);
+      console.log(`[UI] stopInstance (signup-alias) result:`, res);
+    } catch (err) {
+      appendInstanceLog(selectedInstanceId, `[DEBUG CLICK] Lỗi IPC dừng: ${err.message}\n`);
+      console.error(`[UI] Error stopping instance (signup-alias):`, err);
+    }
+  } else {
+    startInstanceProcess(selectedInstanceId, 'signup-alias');
+  }
+});
 loginButton.addEventListener('click', async () => {
   if (!selectedInstanceId) return;
   appendInstanceLog(selectedInstanceId, `\n[DEBUG CLICK] Nút 'Dừng Vote Tài Khoản Cũ' được click! Lớp btnDashboardStop: ${loginButton.classList.contains('btnDashboardStop')}, ID: ${selectedInstanceId}\n`);
@@ -1492,10 +1583,16 @@ downloadTemplateButton?.addEventListener('click', async () => {
   );
 });
 
-// Import Excel Accounts
-importAccountsButton?.addEventListener('click', async () => {
+// Import Choice Dialog Modal Events
+closeImportChoiceDialog?.addEventListener('click', () => importChoiceDialog.close());
+importChoiceDialog?.addEventListener('cancel', () => importChoiceDialog.close());
+
+confirmImportChoiceDialog?.addEventListener('click', async () => {
+  importChoiceDialog.close();
+  const importType = document.querySelector('input[name="importType"]:checked')?.value || 'created';
+
   if (!selectedInstanceId) return;
-  const result = await window.txw.importInstanceAccounts(selectedInstanceId);
+  const result = await window.txw.importInstanceAccounts(selectedInstanceId, importType);
 
   if (!result || result.cancelled) {
     openModal(t('importDoneTitle'), `<p>${t('importCancelled')}</p>`);
@@ -1515,6 +1612,12 @@ importAccountsButton?.addEventListener('click', async () => {
 
   openModal(t('importDoneTitle'), `<p>${message}</p>`);
   await refreshInstances();
+});
+
+// Import Excel Accounts
+importAccountsButton?.addEventListener('click', () => {
+  if (!selectedInstanceId) return;
+  importChoiceDialog.showModal();
 });
 
 exportAccountsButton?.addEventListener('click', async () => {

@@ -135,6 +135,10 @@
                 <span data-i18n="signupManual">Đăng ký mới và Vote (tự nhập captcha)</span>
                 <small data-i18n="signupManualHint">Người dùng tự nhập captcha trên Bugs</small>
               </button>
+              <button class="primaryAction aliasSignup" id="signupAliasButton">
+                <span data-i18n="signupAlias">Đăng ký bằng Aliases</span>
+                <small data-i18n="signupAliasHint">Chọn số lượng tài khoản chưa đăng ký để đăng ký</small>
+              </button>
               <button class="primaryAction tertiary" id="adsButton">
                 <span data-i18n="farmAds">Xem quảng cáo kiếm tim</span>
                 <small data-i18n="farmAdsHint">Tự động chạy máy ảo xem ads 24/7</small>
@@ -233,6 +237,32 @@
       <div id="emulatorOptions" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;"></div>
       <div class="countDialogActions">
         <button id="confirmEmulatorDialog" data-i18n="start">Bắt đầu</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Import Choice Dialog -->
+  <dialog id="importChoiceDialog">
+    <div class="modalHeader">
+      <strong data-i18n="importChoiceTitle">Chọn hình thức Import</strong>
+      <button id="closeImportChoiceDialog" data-i18n="close">Đóng</button>
+    </div>
+    <div class="countDialogBody">
+      <p data-i18n="importChoiceQuestion" style="margin: 0 0 16px; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
+        Vui lòng chọn kiểu danh sách tài khoản muốn import:
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; font-size: 13px; color: rgba(255, 255, 255, 0.95);">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);">
+          <input type="radio" name="importType" value="created" checked style="width: auto; height: auto; accent-color: #d1a8ff;">
+          <span data-i18n="importOptionCreated">Import danh sách tài khoản đã tạo (Cần 3 cột: user, pass, voted_today)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);">
+          <input type="radio" name="importType" value="uncreated" style="width: auto; height: auto; accent-color: #d1a8ff;">
+          <span data-i18n="importOptionUncreated">Import danh sách tài khoản chưa tạo / gmail alias (Chỉ cần 1 cột email)</span>
+        </label>
+      </div>
+      <div class="countDialogActions">
+        <button id="confirmImportChoiceDialog" data-i18n="start">Tiếp tục</button>
       </div>
     </div>
   </dialog>
