@@ -1559,23 +1559,33 @@ ipcMain.handle('instances:delete-accounts', async (_event, instanceId, emails = 
   };
 });
 
-function generateDotTrickEmails(rootEmail, maxLimit = 2048) {
+function generateDotTrickEmails(rootEmail, maxLimit = 2048, excludedAliases = new Set()) {
   const parts = String(rootEmail || '').trim().split('@');
   if (parts.length !== 2) return [];
-  
-  const localPart = parts[0].replace(/\./g, ''); // Remove all dots
+
+  const localPart = parts[0].replace(/\./g, '');
   const domain = parts[1].toLowerCase();
-  
+
   if (!localPart) return [];
-  
+
   const n = localPart.length;
+  const normalizedExcludedAliases = excludedAliases instanceof Set
+    ? excludedAliases
+    : new Set(
+      String(excludedAliases || '')
+        .split(';')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+    );
+
   if (n === 1) {
-    return [rootEmail].map(email => email.trim().toLowerCase());
+    const normalized = `${localPart}@${domain}`.trim().toLowerCase();
+    return normalizedExcludedAliases.has(normalized) ? [] : [normalized];
   }
-  
-  const numCombinations = Math.min(Math.pow(2, n - 1), maxLimit);
+
+  const numCombinations = Math.pow(2, n - 1);
   const results = [];
-  
+
   for (let i = 0; i < numCombinations; i++) {
     let emailLocal = '';
     for (let j = 0; j < n - 1; j++) {
@@ -1585,10 +1595,25 @@ function generateDotTrickEmails(rootEmail, maxLimit = 2048) {
       }
     }
     emailLocal += localPart[n - 1];
-    results.push(`${emailLocal}@${domain}`);
+    const candidate = `${emailLocal}@${domain}`.trim().toLowerCase();
+    if (normalizedExcludedAliases.has(candidate)) {
+      continue;
+    }
+    results.push(candidate);
+    if (results.length >= maxLimit) {
+      break;
+    }
   }
-  
+
   return results;
+}
+
+function isValidAliasRootEmail(rootEmail) {
+  const parts = String(rootEmail || '').trim().split('@');
+  if (parts.length !== 2) return false;
+  const localPart = parts[0].replace(/\./g, '');
+  const domain = parts[1].trim();
+  return Boolean(localPart && domain);
 }
 
 ipcMain.handle('instances:download-template', async (_event, language = 'vi', templateType = 'created', rootEmail = '', excludedAliasesRaw = '', aliasLimitRaw = 2048) => {
@@ -1667,15 +1692,15 @@ ipcMain.handle('instances:download-template', async (_event, language = 'vi', te
   );
 
   if (isAlias) {
-    const generated = generateDotTrickEmails(rootEmail, aliasLimit).filter((email) => !excludedAliases.has(String(email || '').trim().toLowerCase()));
-    if (generated && generated.length > 0) {
-      // If root email was valid, export the clean generated list straight to Excel!
+    const generated = generateDotTrickEmails(rootEmail, aliasLimit, excludedAliases);
+    if (generated.length > 0) {
       rows = [
         ['email'],
         ...generated.map(email => [email])
       ];
+    } else if (isValidAliasRootEmail(rootEmail)) {
+      rows = [['email']];
     } else {
-      // Fallback to instructions template
       rows = [
         ['email'],
         ['example1.alias1@gmail.com'],
