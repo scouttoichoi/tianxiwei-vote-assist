@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('txw', {
   scanEmulators: () => ipcRenderer.invoke('instances:scan-emulators'),
   
   // Shared Utilities
-  downloadTemplate: (language, templateType) => ipcRenderer.invoke('instances:download-template', language, templateType),
+  downloadTemplate: (language, templateType, rootEmail) => ipcRenderer.invoke('instances:download-template', language, templateType, rootEmail),
   
   // Event listeners
   onSetupStatus: (callback) => ipcRenderer.on('setup-status', (_event, value) => callback(value)),

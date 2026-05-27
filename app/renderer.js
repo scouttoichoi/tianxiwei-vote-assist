@@ -56,6 +56,8 @@ const confirmImportChoiceDialog = document.getElementById('confirmImportChoiceDi
 const templateChoiceDialog = document.getElementById('templateChoiceDialog');
 const closeTemplateChoiceDialog = document.getElementById('closeTemplateChoiceDialog');
 const confirmTemplateChoiceDialog = document.getElementById('confirmTemplateChoiceDialog');
+const rootEmailContainer = document.getElementById('rootEmailContainer');
+const templateRootEmail = document.getElementById('templateRootEmail');
 
 // Emulator Choice DOMs
 const emulatorDialog = document.getElementById('emulatorDialog');
@@ -1575,7 +1577,20 @@ confirmEmulatorDialog.addEventListener('click', () => {
 
 // Download Excel Template
 downloadTemplateButton?.addEventListener('click', () => {
+  if (templateRootEmail) templateRootEmail.value = '';
+  if (rootEmailContainer) rootEmailContainer.style.display = 'none';
+  const defaultRadio = document.querySelector('input[name="templateType"][value="created"]');
+  if (defaultRadio) defaultRadio.checked = true;
   templateChoiceDialog.showModal();
+});
+
+// Toggle root email container depending on selected template type
+document.querySelectorAll('input[name="templateType"]').forEach((radio) => {
+  radio.addEventListener('change', (e) => {
+    if (rootEmailContainer) {
+      rootEmailContainer.style.display = e.target.value === 'uncreated' ? 'flex' : 'none';
+    }
+  });
 });
 
 // Download Template Choice Dialog Modal Events
@@ -1585,8 +1600,9 @@ templateChoiceDialog?.addEventListener('cancel', () => templateChoiceDialog.clos
 confirmTemplateChoiceDialog?.addEventListener('click', async () => {
   templateChoiceDialog.close();
   const templateType = document.querySelector('input[name="templateType"]:checked')?.value || 'created';
+  const rootEmail = templateRootEmail?.value || '';
 
-  const result = await window.txw.downloadTemplate(currentLanguage, templateType);
+  const result = await window.txw.downloadTemplate(currentLanguage, templateType, rootEmail);
 
   if (!result || result.cancelled) {
     openModal(t('downloadTemplateDoneTitle'), `<p>${t('downloadTemplateCancelled')}</p>`);

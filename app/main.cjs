@@ -1494,7 +1494,39 @@ ipcMain.handle('instances:toggle-account-status', async (_event, instanceId, ema
   };
 });
 
-ipcMain.handle('instances:download-template', async (_event, language = 'vi', templateType = 'created') => {
+function generateDotTrickEmails(rootEmail, maxLimit = 2048) {
+  const parts = String(rootEmail || '').trim().split('@');
+  if (parts.length !== 2) return [];
+  
+  const localPart = parts[0].replace(/\./g, ''); // Remove all dots
+  const domain = parts[1].toLowerCase();
+  
+  if (!localPart) return [];
+  
+  const n = localPart.length;
+  if (n === 1) {
+    return [rootEmail].map(email => email.trim().toLowerCase());
+  }
+  
+  const numCombinations = Math.min(Math.pow(2, n - 1), maxLimit);
+  const results = [];
+  
+  for (let i = 0; i < numCombinations; i++) {
+    let emailLocal = '';
+    for (let j = 0; j < n - 1; j++) {
+      emailLocal += localPart[j];
+      if ((i >> j) & 1) {
+        emailLocal += '.';
+      }
+    }
+    emailLocal += localPart[n - 1];
+    results.push(`${emailLocal}@${domain}`);
+  }
+  
+  return results;
+}
+
+ipcMain.handle('instances:download-template', async (_event, language = 'vi', templateType = 'created', rootEmail = '') => {
   const isAlias = templateType === 'uncreated';
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Save account import template',
@@ -1563,15 +1595,25 @@ ipcMain.handle('instances:download-template', async (_event, language = 'vi', te
   let colWidths = [];
 
   if (isAlias) {
-    rows = [
-      ['email'],
-      ['example1.alias1@gmail.com'],
-      ['example1.alias2@gmail.com'],
-      [],
-      [templateText.notes],
-      [templateText.aliasNote],
-      [templateText.aliasDeleteNote]
-    ];
+    const generated = generateDotTrickEmails(rootEmail);
+    if (generated && generated.length > 0) {
+      // If root email was valid, export the clean generated list straight to Excel!
+      rows = [
+        ['email'],
+        ...generated.map(email => [email])
+      ];
+    } else {
+      // Fallback to instructions template
+      rows = [
+        ['email'],
+        ['example1.alias1@gmail.com'],
+        ['example1.alias2@gmail.com'],
+        [],
+        [templateText.notes],
+        [templateText.aliasNote],
+        [templateText.aliasDeleteNote]
+      ];
+    }
     colWidths = [{ wch: 32 }];
   } else {
     rows = [

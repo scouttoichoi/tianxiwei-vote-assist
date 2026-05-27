@@ -137,6 +137,8 @@ window.I18N = {
     templateChoiceQuestion: 'Vui lòng chọn kiểu template muốn tải về:',
     templateOptionCreated: 'Template cho tài khoản đã đăng ký (Bảng 3 cột: user, pass, voted_today)',
     templateOptionUncreated: 'Template cho tài khoản chưa đăng ký / Gmail Alias (Bảng 1 cột email)',
+    rootEmailLabel: 'Nhập email gốc (Gmail) để tự tạo danh sách Alias:',
+    rootEmailHint: 'Hệ thống sẽ tự động tạo tối đa 2048 biến thể email (dot trick) và xuất thẳng ra file Excel.',
 
     helpImportTitle: 'Import tài khoản bằng Excel',
     helpImportBody: 'Bạn có thể import tài khoản Bugs có sẵn bằng file Excel. File chỉ cần 3 cột: user, pass, voted_today. Cột user là tài khoản Bugs, cột pass là mật khẩu tài khoản Bugs, không phải mật khẩu email. Nếu voted_today là yes/có/true/1, công cụ sẽ ghi nhận thời điểm vote gần nhất là thời điểm import. Nếu voted_today là no/chưa/false/0, công cụ sẽ tự đặt thời điểm vote gần nhất lùi 24 giờ để tài khoản có thể được chọn vote trong hôm nay.',
@@ -417,6 +419,8 @@ window.I18N = {
     templateChoiceQuestion: '请选择要下载的模板类型：',
     templateOptionCreated: '已注册账号模板（3列：user, pass, voted_today）',
     templateOptionUncreated: '未注册账号/Gmail别名模板（1列：email）',
+    rootEmailLabel: '输入原始邮箱（Gmail）以自动生成别名列表：',
+    rootEmailHint: '系统将自动生成最多 2048 个邮箱变体（dot trick）并直接导出到 Excel 文件。',
 
     helpImportTitle: '通过 Excel 导入账号',
     helpImportBody: '你可以通过 Excel 文件导入已有的 Bugs 账号。文件只需要 3 列：user、pass、voted_today。user 列是 Bugs 账号，pass 列是 Bugs 账号密码，不是邮箱密码。如果 voted_today 是 yes/true/1，工具会把最近投票时间记录为导入时间。如果 voted_today 是 no/false/0，工具会把最近投票时间设置为导入时间的 24 小时前，这样该账号今天可以被选择用于投票。',
@@ -706,6 +710,8 @@ window.I18N = {
     templateChoiceQuestion: '다운로드할 템플릿 유형을 선택하십시오:',
     templateOptionCreated: '등록된 계정 템플릿 (3개 열: user, pass, voted_today)',
     templateOptionUncreated: '미등록 계정/Gmail 앨리어스 템플릿 (1개 열: email)',
+    rootEmailLabel: '앨리어스 목록을 자동 생성할 원본 이메일(Gmail) 입력:',
+    rootEmailHint: '시스템이 최대 2048개의 이메일 변형(dot trick)을 자동 생성하여 Excel 파일로 직접 내보냅니다.',
 
     helpImportTitle: 'Excel로 계정 가져오기',
     helpImportBody: '기존 Bugs 계정을 Excel 파일로 가져올 수 있습니다. 파일에는 user, pass, voted_today 이렇게 3개 열만 있으면 됩니다. user 열은 Bugs 계정이고, pass 열은 이메일 비밀번호가 아니라 Bugs 계정 비밀번호입니다. voted_today가 yes/true/1이면 도구는 가져오기 시점을 최근 투표 시간으로 기록합니다. voted_today가 no/false/0이면 최근 투표 시간을 가져오기 시점보다 24시간 전으로 설정하여 오늘 투표 대상으로 선택될 수 있게 합니다.',
@@ -1006,6 +1012,8 @@ window.I18N = {
     templateChoiceQuestion: 'Please select the template type you want to download:',
     templateOptionCreated: 'Template for registered accounts (3 columns: user, pass, voted_today)',
     templateOptionUncreated: 'Template for unregistered accounts / Gmail Alias (1 column: email)',
+    rootEmailLabel: 'Enter root email (Gmail) to auto-generate Alias list:',
+    rootEmailHint: 'The system will auto-generate up to 2048 email variations (dot trick) and export directly to Excel.',
 
     helpImportTitle: 'Import Accounts from Excel',
     helpImportBody: 'You can import existing Bugs accounts from an Excel file. The file only needs 3 columns: user, pass, voted_today. The user column is the Bugs account, and the pass column is the Bugs account password, not the email password. If voted_today is yes/true/1, the tool records the latest vote time as the import time. If voted_today is no/false/0, the tool sets the latest vote time to 24 hours before import so the account can be selected for voting today.',
