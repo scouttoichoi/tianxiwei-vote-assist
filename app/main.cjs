@@ -900,8 +900,12 @@ function parseVotedToday(value) {
 }
 
 function randomImportedNickname(email) {
-  const name = String(email || '').split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
-  return `import_${name || Date.now().toString(36)}`;
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = 'AL';
+  for (let i = 0; i < 10; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 function importedAccountFromRow(row, importedAt) {
