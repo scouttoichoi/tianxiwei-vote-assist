@@ -155,6 +155,27 @@ function updateExcludedInstanceSummary() {
     : selectedNames.join(', ');
 }
 
+function positionExcludedInstancePicker() {
+  if (!templateExcludeInstancePicker) return;
+  const menu = templateExcludeInstancePicker.querySelector('.instanceExcludeMenu');
+  if (!menu || !templateExcludeInstancePicker.open) return;
+
+  templateExcludeInstancePicker.classList.remove('open-upwards');
+  menu.style.maxHeight = '';
+
+  const rect = templateExcludeInstancePicker.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const gap = 12;
+  const summaryGap = 6;
+  const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap);
+  const spaceAbove = Math.max(0, rect.top - gap);
+  const prefersUpwards = spaceBelow < 180 && spaceAbove > spaceBelow;
+  const availableSpace = Math.max(120, Math.min(180, (prefersUpwards ? spaceAbove : spaceBelow) - summaryGap));
+
+  menu.style.maxHeight = `${availableSpace}px`;
+  templateExcludeInstancePicker.classList.toggle('open-upwards', prefersUpwards);
+}
+
 async function updateAliasExportSummary() {
   if (!aliasRemainingSummary || !aliasSuggestedSplitSummary) return;
   if (!templateAliasVariantCount) {
@@ -1998,7 +2019,7 @@ downloadTemplateButton?.addEventListener('click', () => {
   }
   if (templateExcludeInstanceOptions) {
     templateExcludeInstanceOptions.innerHTML = instances.map((inst) => `
-      <label style="display:flex; gap:8px; align-items:center;">
+      <label class="instanceExcludeOption">
         <input type="checkbox" data-instance-id="${inst.id}" style="width:auto; height:auto; accent-color:#d1a8ff;">
         <span>${inst.name || inst.id}</span>
       </label>
@@ -2083,6 +2104,14 @@ templateExcludedAliases?.addEventListener('input', () => {
 
 templateAliasLimit?.addEventListener('input', () => {
   updateAliasExportSummary();
+});
+
+templateExcludeInstancePicker?.addEventListener('toggle', () => {
+  positionExcludedInstancePicker();
+});
+
+window.addEventListener('resize', () => {
+  positionExcludedInstancePicker();
 });
 
 // Download Template Choice Dialog Modal Events

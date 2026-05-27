@@ -205,7 +205,7 @@
       <strong id="instanceFormTitle" data-i18n="createInstanceTitle">Tạo phiên bản mới</strong>
       <button id="closeInstanceFormDialog" data-i18n="close">Đóng</button>
     </div>
-    <div class="countDialogBody">
+    <div class="countDialogBody templateDialogBody">
       <div class="formField">
         <label for="instanceNameInput" data-i18n="createInstanceName">Tên phiên bản:</label>
         <input id="instanceNameInput" type="text" placeholder="Luồng 01">
@@ -290,14 +290,14 @@
       </div>
       
       <!-- Root Email Input for Alias Auto-Generation -->
-      <div id="rootEmailContainer" style="display: none; flex-direction: column; gap: 8px; margin-bottom: 20px; padding: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1);">
+      <div id="rootEmailContainer" class="aliasTemplatePanel" style="display: none; flex-direction: column; gap: 8px; margin-bottom: 20px;">
         <label for="templateRootEmail" style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.8);" data-i18n="rootEmailLabel">Nhập email gốc (Gmail) để tự tạo danh sách Alias:</label>
         <input type="email" id="templateRootEmail" placeholder="example@gmail.com" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15); background: rgba(0,0,0,0.2); color: white; font: inherit;">
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <button type="button" id="checkAliasVariantsButton" class="miniButton" data-i18n="checkAliasVariants">Kiểm tra biến thể</button>
           <span id="aliasVariantSummary" style="font-size:12px; color: rgba(255,255,255,0.72);"></span>
         </div>
-        <div id="aliasConfigPanel" style="display:none; flex-direction: column; gap: 8px;">
+        <div id="aliasConfigPanel" class="aliasConfigPanel" style="display:none;">
           <label for="templateAliasLimit" style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.8);" data-i18n="aliasLimitLabel">Số biến thể muốn xuất (tối đa 2048):</label>
           <input type="number" id="templateAliasLimit" min="1" max="2048" step="1" value="2048" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15); background: rgba(0,0,0,0.2); color: white; font: inherit;">
           <div style="display:flex; flex-direction:column; gap:4px; font-size:12px; color: rgba(255,255,255,0.78);">
@@ -305,14 +305,14 @@
             <span id="aliasSuggestedSplitSummary"></span>
           </div>
           <label style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.8);" data-i18n="excludedInstanceLabel">Loại trừ danh sách chưa đăng ký của instance:</label>
-          <details id="templateExcludeInstancePicker" style="border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; background: rgba(0,0,0,0.2);">
-            <summary id="templateExcludeInstanceSummary" style="padding: 10px 12px; cursor: pointer; color: rgba(255,255,255,0.9);">Không chọn</summary>
-            <div style="padding: 10px 12px; display:flex; flex-direction:column; gap:8px; max-height: 220px; overflow:auto;">
-              <label style="display:flex; gap:8px; align-items:center;">
+          <details id="templateExcludeInstancePicker" class="instanceExcludePicker">
+            <summary id="templateExcludeInstanceSummary" class="instanceExcludeSummary">Không chọn</summary>
+            <div class="instanceExcludeMenu">
+              <label class="instanceExcludeOption">
                 <input type="checkbox" id="templateExcludeAllInstances" style="width:auto; height:auto; accent-color:#d1a8ff;">
                 <span data-i18n="selectAllInstances">Chọn tất cả instance</span>
               </label>
-              <div id="templateExcludeInstanceOptions" style="display:flex; flex-direction:column; gap:8px;"></div>
+              <div id="templateExcludeInstanceOptions" class="instanceExcludeOptions"></div>
             </div>
           </details>
           <label for="templateExcludedAliases" style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.8);" data-i18n="excludedAliasesLabel">Nhập các alias cần loại trừ (cách nhau bằng dấu ;):</label>
