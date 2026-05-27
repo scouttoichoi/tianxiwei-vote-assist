@@ -1316,95 +1316,45 @@ async function autoSolveCaptcha(page) {
   const captureDuration = Date.now() - startTime;
   console.log(`Đã chụp ảnh CAPTCHA nét căng, sạch bóng nhiễu HTML tại: ${imagePath} (Mất ${captureDuration}ms)`);
 
-  // 3. Gọi công cụ giải CAPTCHA (ưu tiên Python trực tiếp cho tốc độ 290ms, fallback về nhị phân nếu không cài Python)
+  // 3. Gọi công cụ giải CAPTCHA chạy ngầm (Siêu tốc độ, không tốn tài nguyên khởi chạy lại)
   try {
-    let solverCmd = '';
-    
-    if (process.platform !== 'win32') {
-      if (isPythonSupported === null) {
-        try {
-          await execAsync(`python3 -c "import ddddocr"`);
-          isPythonSupported = true;
-          console.log('[DEBUG] Khởi động: Phát hiện Python 3 & ddddocr hoạt động tốt trên hệ thống.');
-        } catch (e) {
-          isPythonSupported = false;
-          console.log('[DEBUG] Khởi động: Không có sẵn Python 3 / ddddocr. Sẽ dùng file nhị phân làm phương án chạy.');
-        }
-      }
-
-      if (isPythonSupported) {
-        let solverPy = path.join(__dirname, 'solve_captcha.py');
-        if (solverPy.includes('app.asar')) {
-          solverPy = solverPy.replace('app.asar', 'app.asar.unpacked');
-        }
-        console.log(`[DEBUG] Sử dụng Python 3 trực tiếp (Tốc độ tối đa ~290ms): ${solverPy}`);
-        solverCmd = `python3 "${solverPy}" "${imagePath}"`;
-      }
+    if (!isCaptchaSolverReady) {
+      console.log('[AI Solver] Bộ giải CAPTCHA chưa sẵn sàng, đang đợi nạp mô hình AI...');
+      await captchaSolverReadyPromise;
     }
 
-    if (!solverCmd) {
-      if (process.platform === 'win32') {
-        let solverExe = path.join(__dirname, 'solve_captcha.exe');
-        if (solverExe.includes('app.asar')) {
-          solverExe = solverExe.replace('app.asar', 'app.asar.unpacked');
-        }
-        console.log(`[DEBUG] Đường dẫn file EXE (Windows): ${solverExe}`);
-        solverCmd = `"${solverExe}" "${imagePath}"`;
-      } else if (process.platform === 'darwin') {
-        let solverMac = path.join(__dirname, 'solve_captcha_mac');
-        if (solverMac.includes('app.asar')) {
-          solverMac = solverMac.replace('app.asar', 'app.asar.unpacked');
-        }
-        console.log(`[DEBUG] Đường dẫn file nhị phân (macOS - Fallback): ${solverMac}`);
-        solverCmd = `"${solverMac}" "${imagePath}"`;
-      } else {
-        let solverPy = path.join(__dirname, 'solve_captcha.py');
-        if (solverPy.includes('app.asar')) {
-          solverPy = solverPy.replace('app.asar', 'app.asar.unpacked');
-        }
-        console.log(`[DEBUG] Đường dẫn file Python (Fallback): ${solverPy}`);
-        solverCmd = `python3 "${solverPy}" "${imagePath}"`;
+    const result = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        currentCaptchaResolver = null;
+        reject(new Error('Timeout giải captcha (15 giây)'));
+      }, 15_000);
+
+      currentCaptchaResolver = (res) => {
+        clearTimeout(timeout);
+        resolve(res);
+      };
+
+      try {
+        captchaSolverProcess.stdin.write(imagePath + '\n');
+      } catch (err) {
+        clearTimeout(timeout);
+        currentCaptchaResolver = null;
+        reject(new Error(`Không thể ghi vào stdin của bộ giải: ${err.message}`));
       }
+    });
+
+    console.log(`[DEBUG AI] Kết quả: ${result}`);
+
+    if (result && !result.startsWith('ERROR:') && !result.startsWith('INIT_ERROR:')) {
+      return result.toUpperCase();
     }
 
-    let stdout, stderr;
-    try {
-      const res = await execAsync(solverCmd);
-      stdout = res.stdout;
-      stderr = res.stderr;
-    } catch (err) {
-      if (process.platform !== 'win32' && process.platform !== 'darwin' && solverCmd.startsWith('python3')) {
-        console.warn('[WARN] Lỗi khi gọi python3, thử fallback sang python...');
-        solverCmd = solverCmd.replace('python3', 'python');
-        const res = await execAsync(solverCmd);
-        stdout = res.stdout;
-        stderr = res.stderr;
-      } else {
-        throw err;
-      }
-    }
-
-    console.log(`[DEBUG AI] Kết quả: ${stdout}`);
-    if (stderr) console.log(`[DEBUG AI] Lỗi ngầm: ${stderr}`);
-
-    const result = stdout.trim().toUpperCase();
-
-    if (result && !result.includes('ERROR:')) {
-      return result;
+    if (result && result.startsWith('ERROR:')) {
+      console.error(`[AI Solver Error]: ${result}`);
     }
     return null;
   } catch (error) {
-    // In ra toàn bộ chi tiết mã lỗi để bắt tận tay
     console.error('[CRITICAL ERROR] Lỗi khi gọi bộ giải CAPTCHA:', error.stack || error.message);
-    if (process.platform !== 'win32' && process.platform !== 'darwin') {
-      console.error(
-        '\n[Mẹo Hướng Dẫn] Trên hệ điều hành này, bạn cần cài đặt Python 3 và thư viện ddddocr để tự động giải Captcha.\n' +
-        'Hãy chạy lệnh sau trong Terminal:\n' +
-        '  pip3 install ddddocr\n' +
-        'Hoặc:\n' +
-        '  pip install ddddocr\n'
-      );
-    }
     return null;
   }
 }

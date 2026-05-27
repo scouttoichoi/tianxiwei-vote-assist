@@ -6,6 +6,24 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 def main():
+    # Hỗ trợ tương thích ngược: Nếu truyền tham số đường dẫn ảnh trực tiếp (kiểu cũ)
+    if len(sys.argv) >= 2:
+        image_path = sys.argv[1]
+        try:
+            ocr = ddddocr.DdddOcr(show_ad=False)
+            ocr.set_ranges("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            if not os.path.exists(image_path):
+                print("ERROR: File không tồn tại")
+                return
+            with open(image_path, 'rb') as f:
+                image_bytes = f.read()
+            result = ocr.classification(image_bytes)
+            print(result)
+        except Exception as e:
+            print(f"ERROR: {e}")
+        return
+
+    # Chế độ mới: Chạy ngầm Keep-Alive liên tục qua stdin/stdout
     try:
         # 1. Khởi tạo mô hình AI duy nhất 1 lần
         ocr = ddddocr.DdddOcr(show_ad=False)
