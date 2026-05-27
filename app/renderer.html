@@ -131,13 +131,13 @@
                 <span data-i18n="loginVote">Vote bằng tài khoản cũ</span>
                 <small data-i18n="loginVoteHint">Chỉ chạy account chưa vote hôm nay</small>
               </button>
-              <button class="primaryAction manualCaptcha" id="signupManualButton">
-                <span data-i18n="signupManual">Đăng ký mới và Vote (tự nhập captcha)</span>
-                <small data-i18n="signupManualHint">Người dùng tự nhập captcha trên Bugs</small>
-              </button>
               <button class="primaryAction aliasSignup" id="signupAliasButton">
                 <span data-i18n="signupAlias">Đăng ký bằng Aliases</span>
                 <small data-i18n="signupAliasHint">Chọn số lượng tài khoản chưa đăng ký để đăng ký</small>
+              </button>
+              <button class="primaryAction manualCaptcha" id="signupManualButton">
+                <span data-i18n="signupManual">Đăng ký mới và Vote (tự nhập captcha)</span>
+                <small data-i18n="signupManualHint">Người dùng tự nhập captcha trên Bugs</small>
               </button>
               <button class="primaryAction tertiary" id="adsButton">
                 <span data-i18n="farmAds">Xem quảng cáo kiếm tim</span>
@@ -145,7 +145,6 @@
               </button>
             </div>
             <div class="dataGroup">
-              <button class="miniButton" id="accountsButton" data-i18n="accounts">Danh sách tài khoản</button>
               <button class="miniButton" id="importAccountsButton" data-i18n="importAccounts"
                 data-i18n-title="importAccountsHint" title="Import tài khoản Bugs bằng file Excel 3 cột.">
                 Import Excel
@@ -158,6 +157,7 @@
                 data-i18n-title="downloadTemplateHint" title="Tải file Excel mẫu để nhập tài khoản Bugs.">
                 Tải template
               </button>
+              <button class="miniButton" id="accountsButton" data-i18n="accounts">Danh sách tài khoản</button>
               <button class="miniButton dark" id="historyButton" data-i18n="history">Lịch sử điểm vote</button>
             </div>
           </section>
@@ -263,6 +263,32 @@
       </div>
       <div class="countDialogActions">
         <button id="confirmImportChoiceDialog" data-i18n="start">Tiếp tục</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Download Template Dialog -->
+  <dialog id="templateChoiceDialog">
+    <div class="modalHeader">
+      <strong data-i18n="templateChoiceTitle">Chọn hình thức Tải Template</strong>
+      <button id="closeTemplateChoiceDialog" data-i18n="close">Đóng</button>
+    </div>
+    <div class="countDialogBody">
+      <p data-i18n="templateChoiceQuestion" style="margin: 0 0 16px; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
+        Vui lòng chọn kiểu template muốn tải về:
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; font-size: 13px; color: rgba(255, 255, 255, 0.95);">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);">
+          <input type="radio" name="templateType" value="created" checked style="width: auto; height: auto; accent-color: #d1a8ff;">
+          <span data-i18n="templateOptionCreated">Template cho tài khoản đã đăng ký (Bảng 3 cột: user, pass, voted_today)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);">
+          <input type="radio" name="templateType" value="uncreated" style="width: auto; height: auto; accent-color: #d1a8ff;">
+          <span data-i18n="templateOptionUncreated">Template cho tài khoản chưa đăng ký / Gmail Alias (Bảng 1 cột email)</span>
+        </label>
+      </div>
+      <div class="countDialogActions">
+        <button id="confirmTemplateChoiceDialog" data-i18n="start">Tải xuống</button>
       </div>
     </div>
   </dialog>

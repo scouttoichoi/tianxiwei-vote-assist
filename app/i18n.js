@@ -133,6 +133,10 @@ window.I18N = {
     importChoiceQuestion: 'Vui lòng chọn kiểu danh sách tài khoản muốn import:',
     importOptionCreated: 'Danh sách tài khoản đã tạo (Cần 3 cột: user, pass, voted_today)',
     importOptionUncreated: 'Danh sách tài khoản chưa tạo / Gmail Aliases (Chỉ cần 1 cột: email/user)',
+    templateChoiceTitle: 'Chọn hình thức Tải Template',
+    templateChoiceQuestion: 'Vui lòng chọn kiểu template muốn tải về:',
+    templateOptionCreated: 'Template cho tài khoản đã đăng ký (Bảng 3 cột: user, pass, voted_today)',
+    templateOptionUncreated: 'Template cho tài khoản chưa đăng ký / Gmail Alias (Bảng 1 cột email)',
 
     helpImportTitle: 'Import tài khoản bằng Excel',
     helpImportBody: 'Bạn có thể import tài khoản Bugs có sẵn bằng file Excel. File chỉ cần 3 cột: user, pass, voted_today. Cột user là tài khoản Bugs, cột pass là mật khẩu tài khoản Bugs, không phải mật khẩu email. Nếu voted_today là yes/có/true/1, công cụ sẽ ghi nhận thời điểm vote gần nhất là thời điểm import. Nếu voted_today là no/chưa/false/0, công cụ sẽ tự đặt thời điểm vote gần nhất lùi 24 giờ để tài khoản có thể được chọn vote trong hôm nay.',
@@ -409,6 +413,10 @@ window.I18N = {
     importChoiceQuestion: '请选择要导入的账号列表类型：',
     importOptionCreated: '已创建账号列表（需要 3 列：user, pass, voted_today）',
     importOptionUncreated: '未创建账号 / Gmail 别名列表（只需要 1 列：email/user）',
+    templateChoiceTitle: '选择模板下载方式',
+    templateChoiceQuestion: '请选择要下载的模板类型：',
+    templateOptionCreated: '已注册账号模板（3列：user, pass, voted_today）',
+    templateOptionUncreated: '未注册账号/Gmail别名模板（1列：email）',
 
     helpImportTitle: '通过 Excel 导入账号',
     helpImportBody: '你可以通过 Excel 文件导入已有的 Bugs 账号。文件只需要 3 列：user、pass、voted_today。user 列是 Bugs 账号，pass 列是 Bugs 账号密码，不是邮箱密码。如果 voted_today 是 yes/true/1，工具会把最近投票时间记录为导入时间。如果 voted_today 是 no/false/0，工具会把最近投票时间设置为导入时间的 24 小时前，这样该账号今天可以被选择用于投票。',
@@ -694,6 +702,10 @@ window.I18N = {
     importChoiceQuestion: '가져올 계정 목록 유형을 선택하세요:',
     importOptionCreated: '생성된 계정 목록 (3개 열 필요: user, pass, voted_today)',
     importOptionUncreated: '미생성 계정 / Gmail Aliases 목록 (1개 열 필요: email/user)',
+    templateChoiceTitle: '템플릿 다운로드 유형 선택',
+    templateChoiceQuestion: '다운로드할 템플릿 유형을 선택하십시오:',
+    templateOptionCreated: '등록된 계정 템플릿 (3개 열: user, pass, voted_today)',
+    templateOptionUncreated: '미등록 계정/Gmail 앨리어스 템플릿 (1개 열: email)',
 
     helpImportTitle: 'Excel로 계정 가져오기',
     helpImportBody: '기존 Bugs 계정을 Excel 파일로 가져올 수 있습니다. 파일에는 user, pass, voted_today 이렇게 3개 열만 있으면 됩니다. user 열은 Bugs 계정이고, pass 열은 이메일 비밀번호가 아니라 Bugs 계정 비밀번호입니다. voted_today가 yes/true/1이면 도구는 가져오기 시점을 최근 투표 시간으로 기록합니다. voted_today가 no/false/0이면 최근 투표 시간을 가져오기 시점보다 24시간 전으로 설정하여 오늘 투표 대상으로 선택될 수 있게 합니다.',
@@ -990,6 +1002,10 @@ window.I18N = {
     importChoiceQuestion: 'Please choose the type of account list to import:',
     importOptionCreated: 'Created accounts list (Needs 3 columns: user, pass, voted_today)',
     importOptionUncreated: 'Uncreated accounts / Gmail Aliases list (Only needs 1 column: email/user)',
+    templateChoiceTitle: 'Select Template Download Type',
+    templateChoiceQuestion: 'Please select the template type you want to download:',
+    templateOptionCreated: 'Template for registered accounts (3 columns: user, pass, voted_today)',
+    templateOptionUncreated: 'Template for unregistered accounts / Gmail Alias (1 column: email)',
 
     helpImportTitle: 'Import Accounts from Excel',
     helpImportBody: 'You can import existing Bugs accounts from an Excel file. The file only needs 3 columns: user, pass, voted_today. The user column is the Bugs account, and the pass column is the Bugs account password, not the email password. If voted_today is yes/true/1, the tool records the latest vote time as the import time. If voted_today is no/false/0, the tool sets the latest vote time to 24 hours before import so the account can be selected for voting today.',
