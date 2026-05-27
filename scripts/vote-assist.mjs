@@ -15,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const TEMP_MAIL_URL = 'https://temp-mail.io/en';
-const BLOCKED_TEMP_MAIL_DOMAINS = new Set(['gmeenramy.com']);
+const BLOCKED_TEMP_MAIL_DOMAINS = new Set(['gmeenramy.com', 'wshu.net', 'yzcalo.com']);
 const TEMP_MAIL_PROVIDERS = [
   {
     id: 'temp-mail-io',
@@ -343,9 +343,20 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
     state.nickname = randomNickname();
     console.log(`Temp mail: ${state.email}`);
 
+    let isDomainBlocked = false;
+    let blockedDomainName = '';
+
     const signupPage = await context.newPage();
     signupPage.on('dialog', async (dialog) => {
-      console.log(`💬 Phát hiện thông báo từ trang web: [${dialog.message()}]`);
+      const msg = dialog.message();
+      console.log(`💬 Phát hiện thông báo từ trang web: [${msg}]`);
+      if (msg.includes('Sign-up is not available with this email domain') || msg.includes('email domain')) {
+        isDomainBlocked = true;
+        const emailParts = state.email.split('@');
+        if (emailParts.length === 2) {
+          blockedDomainName = emailParts[1];
+        }
+      }
       await dialog.dismiss();
     });
     await signupPage.goto(BUGS_SIGNUP_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
@@ -428,6 +439,10 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
             registered = true;
             break;
           }
+
+          if (isDomainBlocked) {
+            break;
+          }
         }
         const checkDuration = Date.now() - checkStart;
         const totalAttemptDuration = Date.now() - attemptStart;
@@ -436,6 +451,12 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
           console.log(`✅ Đăng ký thành công! (Tổng thời gian chu kỳ: ${totalAttemptDuration}ms, thời gian đợi web duyệt: ${checkDuration}ms)`);
           break;
         } else {
+          if (isDomainBlocked) {
+            console.error(`❌ [DOMAIN BLOCKED] Tên miền email [${blockedDomainName}] đã bị Bugs chặn! Tự động thêm vào danh sách đen và đổi sang email mới...`);
+            BLOCKED_TEMP_MAIL_DOMAINS.add(blockedDomainName);
+            throw new Error(`EMAIL_DOMAIN_BLOCKED: ${blockedDomainName}`);
+          }
+
           // Nếu web báo sai Captcha -> Bấm Refresh để tải ảnh mới và thử lại
           console.warn(`[Lần ${attempt}] Đăng ký chưa thành công (Đoán sai Captcha hoặc hết hạn session). Tổng thời gian đã mất: ${totalAttemptDuration}ms. Thử lại...`);
           await clickFirstAvailable(signupPage, ['#btnCaptchaRefresh']).catch(() => { });
