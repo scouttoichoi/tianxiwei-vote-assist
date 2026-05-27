@@ -6,7 +6,7 @@ import process from 'node:process';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import Tesseract from 'tesseract.js';
-import { exec } from 'node:child_process';
+import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 const execAsync = promisify(exec);
@@ -81,6 +81,133 @@ const BUGS_VOTE_TIMEZONE = 'Asia/Seoul';
 
 let activeBrowser = null;
 let isPythonSupported = null;
+
+let captchaSolverProcess = null;
+let isCaptchaSolverReady = false;
+let captchaSolverReadyPromise = null;
+let captchaSolverReadyResolver = null;
+let currentCaptchaResolver = null;
+
+async function initCaptchaSolver(config) {
+  if (captchaSolverProcess) return;
+
+  isCaptchaSolverReady = false;
+  captchaSolverReadyPromise = new Promise((resolve) => {
+    captchaSolverReadyResolver = resolve;
+  });
+
+  let solverCmd = '';
+  let solverArgs = [];
+
+  if (process.platform !== 'win32') {
+    if (isPythonSupported === null) {
+      try {
+        await execAsync(`python3 -c "import ddddocr"`);
+        isPythonSupported = true;
+        console.log('[DEBUG Solver] Phát hiện Python 3 & ddddocr hoạt động tốt.');
+      } catch (e) {
+        isPythonSupported = false;
+        console.log('[DEBUG Solver] Không có sẵn Python 3 / ddddocr. Dùng file nhị phân làm phương án chạy.');
+      }
+    }
+
+    if (isPythonSupported) {
+      let solverPy = path.join(__dirname, 'solve_captcha.py');
+      if (solverPy.includes('app.asar')) {
+        solverPy = solverPy.replace('app.asar', 'app.asar.unpacked');
+      }
+      solverCmd = 'python3';
+      solverArgs = [solverPy];
+    }
+  }
+
+  if (!solverCmd) {
+    if (process.platform === 'win32') {
+      let solverExe = path.join(__dirname, 'solve_captcha.exe');
+      if (solverExe.includes('app.asar')) {
+        solverExe = solverExe.replace('app.asar', 'app.asar.unpacked');
+      }
+      solverCmd = solverExe;
+    } else if (process.platform === 'darwin') {
+      let solverMac = path.join(__dirname, 'solve_captcha_mac');
+      if (solverMac.includes('app.asar')) {
+        solverMac = solverMac.replace('app.asar', 'app.asar.unpacked');
+      }
+      solverCmd = solverMac;
+    } else {
+      let solverPy = path.join(__dirname, 'solve_captcha.py');
+      if (solverPy.includes('app.asar')) {
+        solverPy = solverPy.replace('app.asar', 'app.asar.unpacked');
+      }
+      solverCmd = 'python3';
+      solverArgs = [solverPy];
+    }
+  }
+
+  console.log(`[AI Solver] Khởi chạy bộ giải Captcha ngầm: ${solverCmd} ${solverArgs.join(' ')}`);
+
+  try {
+    captchaSolverProcess = spawn(solverCmd, solverArgs);
+  } catch (error) {
+    console.error('[AI Solver] Lỗi nghiêm trọng khi khởi chạy tiến trình bộ giải:', error);
+    isCaptchaSolverReady = false;
+    if (captchaSolverReadyResolver) captchaSolverReadyResolver();
+    return;
+  }
+
+  captchaSolverProcess.stdout.on('data', (data) => {
+    const lines = data.toString().split('\n');
+    for (let line of lines) {
+      line = line.trim();
+      if (!line) continue;
+
+      if (line === 'READY') {
+        isCaptchaSolverReady = true;
+        if (captchaSolverReadyResolver) {
+          captchaSolverReadyResolver();
+        }
+        console.log('[AI Solver] Bộ giải CAPTCHA đã sẵn sàng nhận ảnh!');
+      } else if (line.startsWith('INIT_ERROR:')) {
+        console.error('[AI Solver] Lỗi khởi tạo mô hình AI từ phía Python:', line);
+        if (captchaSolverReadyResolver) captchaSolverReadyResolver();
+      } else {
+        if (currentCaptchaResolver) {
+          currentCaptchaResolver(line);
+          currentCaptchaResolver = null;
+        }
+      }
+    }
+  });
+
+  captchaSolverProcess.stderr.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg && !msg.includes('UserWarning') && !msg.includes('onnxruntime')) {
+      console.warn(`[AI Solver Log]: ${msg}`);
+    }
+  });
+
+  captchaSolverProcess.on('exit', (code) => {
+    console.log(`[AI Solver] Tiến trình đã thoát với mã: ${code}`);
+    captchaSolverProcess = null;
+    isCaptchaSolverReady = false;
+    if (captchaSolverReadyResolver) captchaSolverReadyResolver();
+  });
+}
+
+function stopCaptchaSolver() {
+  if (captchaSolverProcess) {
+    console.log('[AI Solver] Đang đóng bộ giải Captcha ngầm...');
+    try {
+      captchaSolverProcess.stdin.write('EXIT\n');
+    } catch (e) {
+      try {
+        captchaSolverProcess.kill();
+      } catch (err) { }
+    }
+    captchaSolverProcess = null;
+    isCaptchaSolverReady = false;
+  }
+}
 
 async function handleExit() {
   console.log('\n[System] Nhận tín hiệu dừng (SIGTERM/SIGINT), đang đóng trình duyệt...');
@@ -159,21 +286,30 @@ async function runSignupCommand(config) {
 
   const totalRuns = Number(process.argv[3] ?? config.signupRuns ?? 1);
   const manualCaptcha = process.argv[4] === 'manual-captcha';
-  const browserApi = await loadBrowserApi();
-  let completed = 0;
 
-  for (let runIndex = 1; runIndex <= totalRuns; runIndex += 1) {
-    await cleanupCaptchaImages();
-    console.log(`\nBắt đầu signup-vote lượt ${runIndex}/${totalRuns}`);
-    const ok = await runSingleSignupAndVote(browserApi, config, { manualCaptcha }).catch(async (error) => {
-      console.warn(`Lỗi signup-vote lượt ${runIndex}: ${error.message}`);
-      await appendLog({ status: 'signup-failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => { });
-      return false;
-    });
-    completed += ok ? 1 : 0;
+  // Khởi động tiến trình giải captcha ngầm
+  await initCaptchaSolver(config);
+
+  try {
+    const browserApi = await loadBrowserApi();
+    let completed = 0;
+
+    for (let runIndex = 1; runIndex <= totalRuns; runIndex += 1) {
+      await cleanupCaptchaImages();
+      console.log(`\nBắt đầu signup-vote lượt ${runIndex}/${totalRuns}`);
+      const ok = await runSingleSignupAndVote(browserApi, config, { manualCaptcha }).catch(async (error) => {
+        console.warn(`Lỗi signup-vote lượt ${runIndex}: ${error.message}`);
+        await appendLog({ status: 'signup-failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => { });
+        return false;
+      });
+      completed += ok ? 1 : 0;
+    }
+
+    console.log(`Hoàn tất signup-vote: ${completed}/${totalRuns} lượt.`);
+  } finally {
+    // Luôn đóng tiến trình giải captcha ngầm sạch sẽ
+    stopCaptchaSolver();
   }
-
-  console.log(`Hoàn tất signup-vote: ${completed}/${totalRuns} lượt.`);
 }
 
 async function runSingleSignupAndVote(browserApi, config, options = {}) {
@@ -182,7 +318,7 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
   }
   const runConfig = await resolveRunConfig(config);
   const browser = await launchBrowser(browserApi, runConfig);
-  const context = await browser.newContext?.() ?? browser;
+  const context = await browser.newContext?.({ deviceScaleFactor: 1 }) ?? browser;
   const state = {
     email: '',
     identificationEmail: '',
@@ -352,67 +488,75 @@ async function runLoginCommand(config) {
     return;
   }
 
-  const browserApi = await loadBrowserApi();
-  let completed = 0;
+  // Khởi động tiến trình giải captcha ngầm
+  await initCaptchaSolver(config);
 
-  for (const account of runnable.slice(0, limit)) {
-    const latestAccounts = await loadAccounts();
-    if (!latestAccounts.some((entry) => entry.email === account.email)) {
-      console.log(`Bỏ qua account đã bị xóa khỏi file: ${account.email}`);
-      continue;
-    }
+  try {
+    const browserApi = await loadBrowserApi();
+    let completed = 0;
 
-    if (config.freshProfilePerRun ?? true) {
-      await fs.rm(USER_DATA_DIR, { recursive: true, force: true });
-    }
-
-    const runConfig = await resolveRunConfig(config);
-    const browser = await launchBrowser(browserApi, runConfig);
-    const context = await browser.newContext?.() ?? browser;
-
-    try {
-      console.log(`\nĐang login account: ${account.email}`);
-      const loginPage = await context.newPage();
-      await loginPage.goto(BUGS_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-      const initialLoginUrl = loginPage.url();
-      await fillBugsLogin(loginPage, account);
-
-      console.log('Đã mở đúng form Bugs, điền ID/password, rồi tự bấm Log in ngay.');
-      await waitAfterLoginSubmit(context, loginPage, initialLoginUrl);
-
-      const voted = await voteFavorite(context, config);
-      account.lastVotedAt = voted ? new Date().toISOString() : account.lastVotedAt;
-      account.lastVoteCount = voted ? nextVoteCount(account.lastVoteCount, 5) : normalizeVoteCount(account.lastVoteCount);
-      account.lastError = voted ? '' : 'vote-not-confirmed';
-      account.status = account.status || 'active';
-      completed += voted ? 1 : 0;
-      await saveAccounts(accounts);
-      await appendLog({ email: account.email, completedAt: new Date().toISOString(), status: voted ? 'login-voted' : 'login-vote-failed' });
-    } catch (error) {
-      if (error.message === INVALID_LOGIN_MESSAGE) {
-        account.status = 'deactive';
-        account.lastError = error.message;
-        await saveAccounts(accounts);
-        await appendLog({ email: account.email, failedAt: new Date().toISOString(), status: 'login-invalid-deactive', error: error.message }).catch(() => { });
-        console.warn(`Chuyển account lỗi sang deactive: ${account.email}`);
+    for (const account of runnable.slice(0, limit)) {
+      const latestAccounts = await loadAccounts();
+      if (!latestAccounts.some((entry) => entry.email === account.email)) {
+        console.log(`Bỏ qua account đã bị xóa khỏi file: ${account.email}`);
         continue;
       }
-      account.lastError = error.message;
-      await saveAccounts(accounts);
-      await appendLog({ email: account.email, failedAt: new Date().toISOString(), status: 'login-failed', error: error.message }).catch(() => { });
-      console.warn(`Lỗi account ${account.email}: ${error.message}`);
-    } finally {
-      if (activeBrowser) {
-        await activeBrowser.close?.().catch(() => {});
-        activeBrowser = null;
-      }
+
       if (config.freshProfilePerRun ?? true) {
-        await fs.rm(USER_DATA_DIR, { recursive: true, force: true }).catch(() => { });
+        await fs.rm(USER_DATA_DIR, { recursive: true, force: true });
+      }
+
+      const runConfig = await resolveRunConfig(config);
+      const browser = await launchBrowser(browserApi, runConfig);
+      const context = await browser.newContext?.({ deviceScaleFactor: 1 }) ?? browser;
+
+      try {
+        console.log(`\nĐang login account: ${account.email}`);
+        const loginPage = await context.newPage();
+        await loginPage.goto(BUGS_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+        const initialLoginUrl = loginPage.url();
+        await fillBugsLogin(loginPage, account);
+
+        console.log('Đã mở đúng form Bugs, điền ID/password, rồi tự bấm Log in ngay.');
+        await waitAfterLoginSubmit(context, loginPage, initialLoginUrl);
+
+        const voted = await voteFavorite(context, config);
+        account.lastVotedAt = voted ? new Date().toISOString() : account.lastVotedAt;
+        account.lastVoteCount = voted ? nextVoteCount(account.lastVoteCount, 5) : normalizeVoteCount(account.lastVoteCount);
+        account.lastError = voted ? '' : 'vote-not-confirmed';
+        account.status = account.status || 'active';
+        completed += voted ? 1 : 0;
+        await saveAccounts(accounts);
+        await appendLog({ email: account.email, completedAt: new Date().toISOString(), status: voted ? 'login-voted' : 'login-vote-failed' });
+      } catch (error) {
+        if (error.message === INVALID_LOGIN_MESSAGE) {
+          account.status = 'deactive';
+          account.lastError = error.message;
+          await saveAccounts(accounts);
+          await appendLog({ email: account.email, failedAt: new Date().toISOString(), status: 'login-invalid-deactive', error: error.message }).catch(() => { });
+          console.warn(`Chuyển account lỗi sang deactive: ${account.email}`);
+          continue;
+        }
+        account.lastError = error.message;
+        await saveAccounts(accounts);
+        await appendLog({ email: account.email, failedAt: new Date().toISOString(), status: 'login-failed', error: error.message }).catch(() => { });
+        console.warn(`Lỗi account ${account.email}: ${error.message}`);
+      } finally {
+        if (activeBrowser) {
+          await activeBrowser.close?.().catch(() => {});
+          activeBrowser = null;
+        }
+        if (config.freshProfilePerRun ?? true) {
+          await fs.rm(USER_DATA_DIR, { recursive: true, force: true }).catch(() => { });
+        }
       }
     }
-  }
 
-  console.log(`Hoàn tất login-vote: ${completed}/${Math.min(limit, runnable.length)} account.`);
+    console.log(`Hoàn tất login-vote: ${completed}/${Math.min(limit, runnable.length)} account.`);
+  } finally {
+    // Luôn đóng tiến trình giải captcha ngầm sạch sẽ
+    stopCaptchaSolver();
+  }
 }
 
 async function loadConfig() {
@@ -526,6 +670,7 @@ async function launchBrowser(api, config) {
       userDataDir: config.userDataDir ?? USER_DATA_DIR,
       proxy: config.proxy,
       viewport: config.viewport ?? DEFAULT_VIEWPORT,
+      deviceScaleFactor: 1,
       launchOptions: {
         args: browserArgs
       }
@@ -536,6 +681,7 @@ async function launchBrowser(api, config) {
       humanize: true,
       proxy: config.proxy,
       viewport: config.viewport ?? DEFAULT_VIEWPORT,
+      deviceScaleFactor: 1,
       args: browserArgs
     });
   } else if (typeof api.launch === 'function') {
