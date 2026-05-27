@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import readline from 'node:readline/promises';
@@ -155,7 +156,7 @@ async function initCaptchaSolver(config) {
         if (solverExe.includes('app.asar')) {
           solverExe = solverExe.replace('app.asar', 'app.asar.unpacked');
         }
-        if (fs.existsSync(solverExe)) {
+        if (existsSync(solverExe)) {
           solverCmd = solverExe;
           break;
         }
