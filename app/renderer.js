@@ -52,6 +52,11 @@ const importChoiceDialog = document.getElementById('importChoiceDialog');
 const closeImportChoiceDialog = document.getElementById('closeImportChoiceDialog');
 const confirmImportChoiceDialog = document.getElementById('confirmImportChoiceDialog');
 
+// Download Template Dialog
+const templateChoiceDialog = document.getElementById('templateChoiceDialog');
+const closeTemplateChoiceDialog = document.getElementById('closeTemplateChoiceDialog');
+const confirmTemplateChoiceDialog = document.getElementById('confirmTemplateChoiceDialog');
+
 // Emulator Choice DOMs
 const emulatorDialog = document.getElementById('emulatorDialog');
 const closeEmulatorDialog = document.getElementById('closeEmulatorDialog');
@@ -1569,8 +1574,19 @@ confirmEmulatorDialog.addEventListener('click', () => {
 });
 
 // Download Excel Template
-downloadTemplateButton?.addEventListener('click', async () => {
-  const result = await window.txw.downloadTemplate(currentLanguage);
+downloadTemplateButton?.addEventListener('click', () => {
+  templateChoiceDialog.showModal();
+});
+
+// Download Template Choice Dialog Modal Events
+closeTemplateChoiceDialog?.addEventListener('click', () => templateChoiceDialog.close());
+templateChoiceDialog?.addEventListener('cancel', () => templateChoiceDialog.close());
+
+confirmTemplateChoiceDialog?.addEventListener('click', async () => {
+  templateChoiceDialog.close();
+  const templateType = document.querySelector('input[name="templateType"]:checked')?.value || 'created';
+
+  const result = await window.txw.downloadTemplate(currentLanguage, templateType);
 
   if (!result || result.cancelled) {
     openModal(t('downloadTemplateDoneTitle'), `<p>${t('downloadTemplateCancelled')}</p>`);

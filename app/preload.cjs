@@ -17,14 +17,14 @@ contextBridge.exposeInMainWorld('txw', {
   // Data APIs per Instance
   getInstanceSummary: (id) => ipcRenderer.invoke('instances:get-summary', id),
   getInstanceAccounts: (id) => ipcRenderer.invoke('instances:get-accounts', id),
-  importInstanceAccounts: (id) => ipcRenderer.invoke('instances:import-accounts', id),
+  importInstanceAccounts: (id, importType) => ipcRenderer.invoke('instances:import-accounts', id, importType),
   exportInstanceAccounts: (id) => ipcRenderer.invoke('instances:export-accounts', id),
   markInstanceAccountVoted: (id, email) => ipcRenderer.invoke('instances:mark-voted', id, email),
   toggleInstanceAccountStatus: (id, email, status) => ipcRenderer.invoke('instances:toggle-account-status', id, email, status),
   scanEmulators: () => ipcRenderer.invoke('instances:scan-emulators'),
   
   // Shared Utilities
-  downloadTemplate: (language) => ipcRenderer.invoke('instances:download-template', language),
+  downloadTemplate: (language, templateType) => ipcRenderer.invoke('instances:download-template', language, templateType),
   
   // Event listeners
   onSetupStatus: (callback) => ipcRenderer.on('setup-status', (_event, value) => callback(value)),

@@ -1472,7 +1472,29 @@ ipcMain.handle('instances:toggle-account-status', async (_event, instanceId, ema
     throw new Error('Missing account email');
   }
 
-  const accipcMain.handle('instances:download-template', async (_event, language = 'vi', templateType = 'created') => {
+  const accounts = await readAccounts(instanceId);
+  const account = accounts.find((entry) => String(entry.email || '').trim().toLowerCase() === targetEmail);
+
+  if (!account) {
+    throw new Error('Account not found');
+  }
+
+  account.status = newStatus;
+  if (newStatus === 'active') {
+    account.lastError = ''; // Clear error on activation
+    delete account.lastAdWatchAt; // Xóa mốc xem ad để reset cooldown lập tức
+  }
+
+  await saveAccounts(instanceId, accounts);
+  send('data-updated', { instanceId });
+
+  return {
+    ok: true,
+    account
+  };
+});
+
+ipcMain.handle('instances:download-template', async (_event, language = 'vi', templateType = 'created') => {
   const isAlias = templateType === 'uncreated';
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Save account import template',
@@ -1572,39 +1594,6 @@ ipcMain.handle('instances:toggle-account-status', async (_event, instanceId, ema
 
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   sheet['!cols'] = colWidths;
-
-  XLSX.utils.book_append_sheet(workbook, sheet, 'accounts');
-  XLSX.writeFile(workbook, result.filePath);
-
-  return {
-    cancelled: false,
-    filePath: result.filePath
-  };
-});��오기 전에 이 주의 안내 영역 전체를 삭제하고 위의 3개 열 표만 남겨 주세요.'
-    }
-  };
-
-  const templateText = templateTexts[language] || templateTexts.en;
-
-  const rows = [
-    ['user', 'pass', 'voted_today'],
-    ['example1@bugs.com', 'BugsPassword123', templateText.no],
-    ['example2@bugs.com', 'BugsPassword456', templateText.yes],
-    [],
-    [templateText.notes],
-    [templateText.userNote],
-    [templateText.passNote],
-    [templateText.votedNote],
-    [templateText.deleteNote]
-  ];
-
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
-
-  sheet['!cols'] = [
-    { wch: 28 },
-    { wch: 24 },
-    { wch: 30 }
-  ];
 
   XLSX.utils.book_append_sheet(workbook, sheet, 'accounts');
   XLSX.writeFile(workbook, result.filePath);
