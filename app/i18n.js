@@ -141,6 +141,9 @@ window.I18N = {
     templateOptionUncreated: 'Template cho tài khoản chưa đăng ký / Gmail Alias (Bảng 1 cột email)',
     rootEmailLabel: 'Nhập email gốc (Gmail) để tự tạo danh sách Alias:',
     rootEmailHint: 'Hệ thống sẽ tự động tạo tối đa 2048 biến thể email (dot trick) và xuất thẳng ra file Excel.',
+    excludedInstanceLabel: 'Loại trừ danh sách chưa đăng ký của instance:',
+    excludedInstanceNone: 'Không chọn',
+    excludedInstanceHint: 'Có thể chọn một hoặc nhiều instance. App sẽ tự loại trừ toàn bộ email đang nằm trong tab Chưa đăng ký của các instance đó.',
     excludedAliasesLabel: 'Nhập các alias cần loại trừ (cách nhau bằng dấu ;):',
     excludedAliasesHint: 'Những alias này sẽ bị bỏ qua khi tạo template để tránh trùng với tài khoản đã đăng ký.',
 
@@ -444,6 +447,9 @@ window.I18N = {
     templateOptionUncreated: '未注册账号/Gmail别名模板（1列：email）',
     rootEmailLabel: '输入原始邮箱（Gmail）以自动生成别名列表：',
     rootEmailHint: '系统将自动生成最多 2048 个邮箱变体（dot trick）并直接导出到 Excel 文件。',
+    excludedInstanceLabel: '排除实例的未注册列表：',
+    excludedInstanceNone: '不选择',
+    excludedInstanceHint: '可以选择一个或多个实例。应用会自动排除这些实例“未注册”标签中的全部邮箱。',
     excludedAliasesLabel: '输入需要排除的别名（用 ; 分隔）：',
     excludedAliasesHint: '这些别名会在生成模板时被跳过，以避免和已注册账号重复。',
 
@@ -756,6 +762,9 @@ window.I18N = {
     templateOptionUncreated: '미등록 계정/Gmail 앨리어스 템플릿 (1개 열: email)',
     rootEmailLabel: '앨리어스 목록을 자동 생성할 원본 이메일(Gmail) 입력:',
     rootEmailHint: '시스템이 최대 2048개의 이메일 변형(dot trick)을 자동 생성하여 Excel 파일로 직접 내보냅니다.',
+    excludedInstanceLabel: '인스턴스의 미등록 목록 제외:',
+    excludedInstanceNone: '선택 안 함',
+    excludedInstanceHint: '하나 이상의 인스턴스를 선택할 수 있습니다. 선택한 인스턴스들의 미등록 탭 이메일 전체를 자동 제외합니다.',
     excludedAliasesLabel: '제외할 alias를 입력하세요 (; 로 구분):',
     excludedAliasesHint: '이미 등록된 계정과 겹치지 않도록 이 alias들은 템플릿 생성에서 제외됩니다.',
 
@@ -1079,6 +1088,9 @@ window.I18N = {
     templateOptionUncreated: 'Template for unregistered accounts / Gmail Alias (1 column: email)',
     rootEmailLabel: 'Enter root email (Gmail) to auto-generate Alias list:',
     rootEmailHint: 'The system will auto-generate up to 2048 email variations (dot trick) and export directly to Excel.',
+    excludedInstanceLabel: 'Exclude unregistered list from instances:',
+    excludedInstanceNone: 'None',
+    excludedInstanceHint: 'You can select one or more instances. The app will automatically exclude every email currently listed under Unregistered for those instances.',
     excludedAliasesLabel: 'Enter aliases to exclude (separated by ;):',
     excludedAliasesHint: 'These aliases will be skipped when generating the template to avoid duplicates with already registered accounts.',
 
