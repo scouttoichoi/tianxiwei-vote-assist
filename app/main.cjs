@@ -1510,6 +1510,27 @@ ipcMain.handle('instances:toggle-account-status', async (_event, instanceId, ema
   };
 });
 
+ipcMain.handle('instances:delete-account', async (_event, instanceId, email) => {
+  const targetEmail = String(email || '').trim().toLowerCase();
+  if (!targetEmail) {
+    throw new Error('Missing account email');
+  }
+
+  const accounts = await readAccounts(instanceId);
+  const nextAccounts = accounts.filter((entry) => String(entry.email || '').trim().toLowerCase() !== targetEmail);
+
+  if (nextAccounts.length === accounts.length) {
+    throw new Error('Account not found');
+  }
+
+  await saveAccounts(instanceId, nextAccounts);
+  send('data-updated', { instanceId });
+
+  return {
+    ok: true
+  };
+});
+
 function generateDotTrickEmails(rootEmail, maxLimit = 2048) {
   const parts = String(rootEmail || '').trim().split('@');
   if (parts.length !== 2) return [];
@@ -1542,7 +1563,7 @@ function generateDotTrickEmails(rootEmail, maxLimit = 2048) {
   return results;
 }
 
-ipcMain.handle('instances:download-template', async (_event, language = 'vi', templateType = 'created', rootEmail = '') => {
+ipcMain.handle('instances:download-template', async (_event, language = 'vi', templateType = 'created', rootEmail = '', excludedAliasesRaw = '') => {
   const isAlias = templateType === 'uncreated';
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Save account import template',
@@ -1609,9 +1630,15 @@ ipcMain.handle('instances:download-template', async (_event, language = 'vi', te
 
   let rows = [];
   let colWidths = [];
+  const excludedAliases = new Set(
+    String(excludedAliasesRaw || '')
+      .split(';')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+  );
 
   if (isAlias) {
-    const generated = generateDotTrickEmails(rootEmail);
+    const generated = generateDotTrickEmails(rootEmail).filter((email) => !excludedAliases.has(String(email || '').trim().toLowerCase()));
     if (generated && generated.length > 0) {
       // If root email was valid, export the clean generated list straight to Excel!
       rows = [

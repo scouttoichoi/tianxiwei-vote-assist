@@ -58,6 +58,7 @@ const closeTemplateChoiceDialog = document.getElementById('closeTemplateChoiceDi
 const confirmTemplateChoiceDialog = document.getElementById('confirmTemplateChoiceDialog');
 const rootEmailContainer = document.getElementById('rootEmailContainer');
 const templateRootEmail = document.getElementById('templateRootEmail');
+const templateExcludedAliases = document.getElementById('templateExcludedAliases');
 
 // Emulator Choice DOMs
 const emulatorDialog = document.getElementById('emulatorDialog');
@@ -79,6 +80,11 @@ let selectedInstanceId = null;
 const instanceLogs = new Map(); // key: instanceId, value: logText
 let editingInstanceId = null; // null if creating, string id if editing
 let emulatorPickerInstanceId = '';
+let accountSelectionState = {
+  active: new Set(),
+  notRegister: new Set(),
+  deactive: new Set()
+};
 
 function t(key) {
   return window.I18N?.[currentLanguage]?.[key] || window.I18N?.en?.[key] || key;
@@ -653,6 +659,12 @@ async function showAccounts() {
     notRegister: accounts.filter((account) => (account.status || '').toLowerCase() === 'not-register'),
     deactive: accounts.filter((account) => (account.status || '').toLowerCase() === 'deactive')
   };
+  for (const [tabKey, items] of Object.entries(groupedAccounts)) {
+    const validEmails = new Set(items.map((account) => account.email).filter(Boolean));
+    accountSelectionState[tabKey] = new Set(
+      [...(accountSelectionState[tabKey] || new Set())].filter((email) => validEmails.has(email))
+    );
+  }
 
   const tabEmptyKeys = {
     active: 'noActiveAccounts',
@@ -662,6 +674,44 @@ async function showAccounts() {
 
   const activeTabState = modalBody.querySelector('[data-tab-trigger].is-active')?.dataset.tabTrigger || 'active';
   const previousSearch = modalBody.querySelector('[data-account-search]')?.value || '';
+  const selectedEmails = new Set(accountSelectionState[activeTabState] || []);
+
+  const filterAccountsByKeyword = (items, keyword) => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    return !normalizedKeyword
+      ? items
+      : items.filter((account) =>
+        [account.email, account.password, account.lastError]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedKeyword))
+      );
+  };
+
+  const filteredItemsForActiveTab = filterAccountsByKeyword(groupedAccounts[activeTabState] || [], previousSearch);
+
+  const getBulkActions = (tabType) => {
+    const selectedCount = (accountSelectionState[tabType] || new Set()).size;
+    if (!selectedCount) return [];
+    if (tabType === 'active') {
+      return [
+        { action: 'mark-selected', label: `${t('bulkMarkVotedToday')} (${selectedCount})`, tone: 'primary' },
+        { action: 'deactivate-selected', label: `${t('bulkDeactivateAccounts')} (${selectedCount})`, tone: 'danger' },
+        { action: 'move-selected-not-register', label: `${t('bulkMoveToNotRegister')} (${selectedCount})`, tone: 'muted' }
+      ];
+    }
+    if (tabType === 'deactive') {
+      return [
+        { action: 'activate-selected', label: `${t('bulkActivateAccounts')} (${selectedCount})`, tone: 'success' },
+        { action: 'move-selected-not-register', label: `${t('bulkMoveToNotRegister')} (${selectedCount})`, tone: 'muted' }
+      ];
+    }
+    if (tabType === 'notRegister') {
+      return [
+        { action: 'delete-selected', label: `${t('deleteSelectedAccounts')} (${selectedCount})`, tone: 'danger' }
+      ];
+    }
+    return [];
+  };
 
   const getActionDescriptors = (tabType, account) => {
     const email = account.email || '';
@@ -670,6 +720,11 @@ async function showAccounts() {
         { type: 'mark', icon: '✓', title: t('markVotedToday'), email },
         { type: 'toggle', icon: '⏸', title: t('deactivateAccount'), email, newStatus: 'deactive', tone: 'danger' },
         { type: 'toggle', icon: '↺', title: t('moveToNotRegister'), email, newStatus: 'not-register', tone: 'muted' }
+      ];
+    }
+    if (tabType === 'notRegister') {
+      return [
+        { type: 'delete', icon: '🗑', title: t('deleteNotRegisterAccount'), email, tone: 'danger' }
       ];
     }
     if (tabType === 'deactive') {
@@ -692,6 +747,8 @@ async function showAccounts() {
 
     if (action.type === 'mark') {
       sharedAttrs.push(`data-mark-voted-email="${action.email}"`);
+    } else if (action.type === 'delete') {
+      sharedAttrs.push(`data-delete-account-email="${action.email}"`);
     } else {
       sharedAttrs.push(`data-toggle-status-email="${action.email}"`);
       sharedAttrs.push(`data-new-status="${action.newStatus}"`);
@@ -701,14 +758,7 @@ async function showAccounts() {
   };
 
   const renderRows = (items, tabType, searchValue = '') => {
-    const keyword = searchValue.trim().toLowerCase();
-    const filtered = !keyword
-      ? items
-      : items.filter((account) =>
-        [account.email, account.password, account.lastError]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(keyword))
-      );
+    const filtered = filterAccountsByKeyword(items, searchValue);
 
     if (!filtered.length) {
       const emptyKey = keyword ? 'noSearchResults' : tabEmptyKeys[tabType];
@@ -717,6 +767,15 @@ async function showAccounts() {
 
     return filtered.map((account) => `
       <tr>
+        <td class="accountCheckboxCell">
+          <input
+            type="checkbox"
+            class="accountRowCheckbox"
+            data-account-select-email="${account.email || ''}"
+            data-account-select-tab="${tabType}"
+            ${selectedEmails.has(account.email || '') ? 'checked' : ''}
+          >
+        </td>
         <td>${account.email || '-'}</td>
         <td>${account.password || '-'}</td>
         <td>${formatDateTime(account.lastVotedAt)}</td>
@@ -756,13 +815,24 @@ async function showAccounts() {
     </div>
 
     <div class="accountsToolbar">
-      <input
-        type="search"
-        class="accountsSearchInput"
-        data-account-search
-        placeholder="${t('searchAccountsPlaceholder')}"
-        value="${previousSearch.replace(/"/g, '&quot;')}"
-      >
+      <div class="accountsToolbarGroup">
+        <input
+          type="search"
+          class="accountsSearchInput"
+          data-account-search
+          placeholder="${t('searchAccountsPlaceholder')}"
+          value="${previousSearch.replace(/"/g, '&quot;')}"
+        >
+        ${getBulkActions(activeTabState).map((item) => `
+          <button
+            type="button"
+            class="miniButton bulkActionBtn${item.tone ? ` is-${item.tone}` : ''}"
+            data-bulk-action="${item.action}"
+          >
+            ${item.label}
+          </button>
+        `).join('')}
+      </div>
     </div>
 
     <div class="accountsTabs" role="tablist" aria-label="Trạng thái tài khoản">
@@ -775,6 +845,14 @@ async function showAccounts() {
       <table>
         <thead>
           <tr>
+            <th class="accountCheckboxCell">
+              <input
+                type="checkbox"
+                class="accountRowCheckbox"
+                data-select-all-tab="active"
+                ${activeTabState === 'active' && filteredItemsForActiveTab.length > 0 && filteredItemsForActiveTab.every((account) => selectedEmails.has(account.email || '')) ? 'checked' : ''}
+              >
+            </th>
             <th>Email</th>
             <th>${t('password')}</th>
             <th>${t('lastVote')}</th>
@@ -791,6 +869,14 @@ async function showAccounts() {
       <table>
         <thead>
           <tr>
+            <th class="accountCheckboxCell">
+              <input
+                type="checkbox"
+                class="accountRowCheckbox"
+                data-select-all-tab="notRegister"
+                ${activeTabState === 'notRegister' && filteredItemsForActiveTab.length > 0 && filteredItemsForActiveTab.every((account) => selectedEmails.has(account.email || '')) ? 'checked' : ''}
+              >
+            </th>
             <th>Email</th>
             <th>${t('password')}</th>
             <th>${t('lastVote')}</th>
@@ -807,6 +893,14 @@ async function showAccounts() {
       <table>
         <thead>
           <tr>
+            <th class="accountCheckboxCell">
+              <input
+                type="checkbox"
+                class="accountRowCheckbox"
+                data-select-all-tab="deactive"
+                ${activeTabState === 'deactive' && filteredItemsForActiveTab.length > 0 && filteredItemsForActiveTab.every((account) => selectedEmails.has(account.email || '')) ? 'checked' : ''}
+              >
+            </th>
             <th>Email</th>
             <th>${t('password')}</th>
             <th>${t('lastVote')}</th>
@@ -825,6 +919,10 @@ async function showAccounts() {
   const panels = [...modalBody.querySelectorAll('[data-tab-panel]')];
   const markButtons = [...modalBody.querySelectorAll('[data-mark-voted-email]')];
   const toggleButtons = [...modalBody.querySelectorAll('[data-toggle-status-email]')];
+  const deleteButtons = [...modalBody.querySelectorAll('[data-delete-account-email]')];
+  const rowCheckboxes = [...modalBody.querySelectorAll('[data-account-select-email]')];
+  const selectAllCheckbox = modalBody.querySelector(`[data-select-all-tab="${activeTabState}"]`);
+  const bulkActionButtons = [...modalBody.querySelectorAll('[data-bulk-action]')];
 
   const activateTab = (tabName) => {
     for (const trigger of triggers) {
@@ -848,6 +946,39 @@ async function showAccounts() {
       nextInput.value = nextValue;
       nextInput.setSelectionRange(nextValue.length, nextValue.length);
     }
+  });
+
+  for (const checkbox of rowCheckboxes) {
+    checkbox.addEventListener('change', () => {
+      const email = checkbox.dataset.accountSelectEmail;
+      const tabKey = checkbox.dataset.accountSelectTab;
+      if (!email) return;
+      if (!accountSelectionState[tabKey]) {
+        accountSelectionState[tabKey] = new Set();
+      }
+      if (checkbox.checked) {
+        accountSelectionState[tabKey].add(email);
+      } else {
+        accountSelectionState[tabKey].delete(email);
+      }
+      showAccounts();
+    });
+  }
+
+  selectAllCheckbox?.addEventListener('change', () => {
+    const visibleEmails = filterAccountsByKeyword(groupedAccounts[activeTabState] || [], searchInput?.value || '')
+      .map((account) => account.email)
+      .filter(Boolean);
+
+    if (!accountSelectionState[activeTabState]) {
+      accountSelectionState[activeTabState] = new Set();
+    }
+    if (selectAllCheckbox.checked) {
+      for (const email of visibleEmails) accountSelectionState[activeTabState].add(email);
+    } else {
+      for (const email of visibleEmails) accountSelectionState[activeTabState].delete(email);
+    }
+    showAccounts();
   });
 
   for (const button of markButtons) {
@@ -906,6 +1037,70 @@ async function showAccounts() {
           : newStatus === 'not-register'
             ? t('moveToNotRegister')
             : t('deactivateAccount');
+        window.alert(error.message || error);
+      }
+    });
+  }
+
+  for (const button of deleteButtons) {
+    button.addEventListener('click', async () => {
+      const email = button.dataset.deleteAccountEmail;
+      const ok = window.confirm(t('confirmDeleteNotRegisterAccount').replace('{email}', email));
+      if (!ok) return;
+
+      button.disabled = true;
+      button.innerHTML = '<span aria-hidden="true">…</span>';
+
+      try {
+        await window.txw.deleteInstanceAccount(selectedInstanceId, email);
+        await refreshInstances();
+        await showAccounts();
+      } catch (error) {
+        button.disabled = false;
+        button.title = t('deleteNotRegisterAccount');
+        button.innerHTML = '<span aria-hidden="true">🗑</span>';
+        window.alert(error.message || error);
+      }
+    });
+  }
+
+  for (const button of bulkActionButtons) {
+    button.addEventListener('click', async () => {
+      const action = button.dataset.bulkAction;
+      const emails = [...(accountSelectionState[activeTabState] || new Set())];
+      if (!emails.length) return;
+
+      let confirmMessage = '';
+      if (action === 'mark-selected') confirmMessage = t('confirmBulkMarkVotedToday').replace('{count}', String(emails.length));
+      if (action === 'deactivate-selected') confirmMessage = t('confirmBulkDeactivateAccounts').replace('{count}', String(emails.length));
+      if (action === 'activate-selected') confirmMessage = t('confirmBulkActivateAccounts').replace('{count}', String(emails.length));
+      if (action === 'move-selected-not-register') confirmMessage = t('confirmBulkMoveToNotRegister').replace('{count}', String(emails.length));
+      if (action === 'delete-selected') confirmMessage = t('confirmDeleteSelectedAccounts').replace('{count}', String(emails.length));
+
+      const ok = window.confirm(confirmMessage);
+      if (!ok) return;
+
+      button.disabled = true;
+
+      try {
+        for (const email of emails) {
+          if (action === 'mark-selected') {
+            await window.txw.markInstanceAccountVoted(selectedInstanceId, email);
+          } else if (action === 'deactivate-selected') {
+            await window.txw.toggleInstanceAccountStatus(selectedInstanceId, email, 'deactive');
+          } else if (action === 'activate-selected') {
+            await window.txw.toggleInstanceAccountStatus(selectedInstanceId, email, 'active');
+          } else if (action === 'move-selected-not-register') {
+            await window.txw.toggleInstanceAccountStatus(selectedInstanceId, email, 'not-register');
+          } else if (action === 'delete-selected') {
+            await window.txw.deleteInstanceAccount(selectedInstanceId, email);
+          }
+        }
+        accountSelectionState[activeTabState]?.clear();
+        await refreshInstances();
+        await showAccounts();
+      } catch (error) {
+        button.disabled = false;
         window.alert(error.message || error);
       }
     });
@@ -1630,6 +1825,7 @@ confirmEmulatorDialog.addEventListener('click', () => {
 // Download Excel Template
 downloadTemplateButton?.addEventListener('click', () => {
   if (templateRootEmail) templateRootEmail.value = '';
+  if (templateExcludedAliases) templateExcludedAliases.value = '';
   if (rootEmailContainer) rootEmailContainer.style.display = 'none';
   const defaultRadio = document.querySelector('input[name="templateType"][value="created"]');
   if (defaultRadio) defaultRadio.checked = true;
@@ -1653,8 +1849,9 @@ confirmTemplateChoiceDialog?.addEventListener('click', async () => {
   templateChoiceDialog.close();
   const templateType = document.querySelector('input[name="templateType"]:checked')?.value || 'created';
   const rootEmail = templateRootEmail?.value || '';
+  const excludedAliases = templateExcludedAliases?.value || '';
 
-  const result = await window.txw.downloadTemplate(currentLanguage, templateType, rootEmail);
+  const result = await window.txw.downloadTemplate(currentLanguage, templateType, rootEmail, excludedAliases);
 
   if (!result || result.cancelled) {
     openModal(t('downloadTemplateDoneTitle'), `<p>${t('downloadTemplateCancelled')}</p>`);

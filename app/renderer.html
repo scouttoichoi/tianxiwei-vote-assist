@@ -293,6 +293,9 @@
       <div id="rootEmailContainer" style="display: none; flex-direction: column; gap: 8px; margin-bottom: 20px; padding: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1);">
         <label for="templateRootEmail" style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.8);" data-i18n="rootEmailLabel">Nhập email gốc (Gmail) để tự tạo danh sách Alias:</label>
         <input type="email" id="templateRootEmail" placeholder="example@gmail.com" style="width: 100%; height: 36px; padding: 0 10px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15); background: rgba(0,0,0,0.2); color: white; font: inherit;">
+        <label for="templateExcludedAliases" style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.8);" data-i18n="excludedAliasesLabel">Nhập các alias cần loại trừ (cách nhau bằng dấu ;):</label>
+        <textarea id="templateExcludedAliases" rows="3" placeholder="alias1@gmail.com; alias2@gmail.com" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15); background: rgba(0,0,0,0.2); color: white; font: inherit; resize: vertical;"></textarea>
+        <small style="font-size: 10px; color: rgba(255,255,255,0.5);" data-i18n="excludedAliasesHint">Những alias này sẽ bị bỏ qua khi tạo template để tránh trùng với tài khoản đã đăng ký.</small>
         <small style="font-size: 10px; color: rgba(255,255,255,0.5);" data-i18n="rootEmailHint">Hệ thống sẽ tự động tạo tối đa 2048 biến thể email (dot trick) và xuất thẳng ra file Excel.</small>
       </div>
 

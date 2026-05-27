@@ -21,10 +21,11 @@ contextBridge.exposeInMainWorld('txw', {
   exportInstanceAccounts: (id) => ipcRenderer.invoke('instances:export-accounts', id),
   markInstanceAccountVoted: (id, email) => ipcRenderer.invoke('instances:mark-voted', id, email),
   toggleInstanceAccountStatus: (id, email, status) => ipcRenderer.invoke('instances:toggle-account-status', id, email, status),
+  deleteInstanceAccount: (id, email) => ipcRenderer.invoke('instances:delete-account', id, email),
   scanEmulators: () => ipcRenderer.invoke('instances:scan-emulators'),
   
   // Shared Utilities
-  downloadTemplate: (language, templateType, rootEmail) => ipcRenderer.invoke('instances:download-template', language, templateType, rootEmail),
+  downloadTemplate: (language, templateType, rootEmail, excludedAliases) => ipcRenderer.invoke('instances:download-template', language, templateType, rootEmail, excludedAliases),
   
   // Event listeners
   onSetupStatus: (callback) => ipcRenderer.on('setup-status', (_event, value) => callback(value)),
