@@ -146,11 +146,20 @@ async function initCaptchaSolver(config) {
 
   if (!solverCmd) {
     if (process.platform === 'win32') {
-      let solverExe = path.join(__dirname, 'solve_captcha.exe');
-      if (solverExe.includes('app.asar')) {
-        solverExe = solverExe.replace('app.asar', 'app.asar.unpacked');
+      const solverExeCandidates = [
+        path.join(__dirname, 'solve_captcha', 'solve_captcha.exe'),
+        path.join(__dirname, 'solve_captcha.exe')
+      ];
+
+      for (let solverExe of solverExeCandidates) {
+        if (solverExe.includes('app.asar')) {
+          solverExe = solverExe.replace('app.asar', 'app.asar.unpacked');
+        }
+        if (fs.existsSync(solverExe)) {
+          solverCmd = solverExe;
+          break;
+        }
       }
-      solverCmd = solverExe;
     } else if (process.platform === 'darwin') {
       let solverMac = path.join(__dirname, 'solve_captcha_mac');
       if (solverMac.includes('app.asar')) {
