@@ -1009,13 +1009,14 @@ ipcMain.handle('instances:list', async () => {
     const accounts = await readAccounts(inst.id);
     const summary = await readScoreSummary(inst.id);
 
-    const votedTodayCount = accounts.filter(acc => hasVotedTodayKorea(acc.lastVotedAt)).length;
+    const activeAccounts = accounts.filter(acc => !['disabled', 'deactive'].includes(acc.status));
+    const votedTodayCount = activeAccounts.filter(acc => hasVotedTodayKorea(acc.lastVotedAt)).length;
 
     return {
       ...inst,
       running,
       runningMode,
-      totalAccounts: accounts.length,
+      totalAccounts: activeAccounts.length,
       votedTodayCount,
       latestScore: summary.latest
     };
