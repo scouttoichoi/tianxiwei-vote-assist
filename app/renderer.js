@@ -58,7 +58,16 @@ const closeTemplateChoiceDialog = document.getElementById('closeTemplateChoiceDi
 const confirmTemplateChoiceDialog = document.getElementById('confirmTemplateChoiceDialog');
 const rootEmailContainer = document.getElementById('rootEmailContainer');
 const templateRootEmail = document.getElementById('templateRootEmail');
-const templateExcludeInstanceSelect = document.getElementById('templateExcludeInstanceSelect');
+const checkAliasVariantsButton = document.getElementById('checkAliasVariantsButton');
+const aliasVariantSummary = document.getElementById('aliasVariantSummary');
+const aliasConfigPanel = document.getElementById('aliasConfigPanel');
+const templateAliasLimit = document.getElementById('templateAliasLimit');
+const aliasRemainingSummary = document.getElementById('aliasRemainingSummary');
+const aliasSuggestedSplitSummary = document.getElementById('aliasSuggestedSplitSummary');
+const templateExcludeInstancePicker = document.getElementById('templateExcludeInstancePicker');
+const templateExcludeInstanceSummary = document.getElementById('templateExcludeInstanceSummary');
+const templateExcludeAllInstances = document.getElementById('templateExcludeAllInstances');
+const templateExcludeInstanceOptions = document.getElementById('templateExcludeInstanceOptions');
 const templateExcludedAliases = document.getElementById('templateExcludedAliases');
 
 // Emulator Choice DOMs
@@ -87,9 +96,104 @@ let accountSelectionState = {
   deactive: new Set()
 };
 let accountModalActiveTab = 'active';
+let templateAliasVariantCount = 0;
 
 function t(key) {
   return window.I18N?.[currentLanguage]?.[key] || window.I18N?.en?.[key] || key;
+}
+
+function calculateAliasVariantCount(rootEmail) {
+  const parts = String(rootEmail || '').trim().split('@');
+  if (parts.length !== 2) return 0;
+  const localPart = parts[0].replace(/\./g, '');
+  if (!localPart) return 0;
+  if (localPart.length === 1) return 1;
+  return 2 ** (localPart.length - 1);
+}
+
+function normalizeEmailParts(email) {
+  const parts = String(email || '').trim().toLowerCase().split('@');
+  if (parts.length !== 2) return null;
+  return {
+    local: parts[0],
+    localWithoutDots: parts[0].replace(/\./g, ''),
+    domain: parts[1]
+  };
+}
+
+function isAliasVariantOfRoot(rootEmail, candidateEmail) {
+  const root = normalizeEmailParts(rootEmail);
+  const candidate = normalizeEmailParts(candidateEmail);
+  if (!root || !candidate) return false;
+  return root.domain === candidate.domain && root.localWithoutDots === candidate.localWithoutDots;
+}
+
+function getSelectedExcludedInstanceIds() {
+  if (!templateExcludeInstanceOptions) return [];
+  return [...templateExcludeInstanceOptions.querySelectorAll('input[type="checkbox"][data-instance-id]:checked')]
+    .map((input) => input.dataset.instanceId)
+    .filter(Boolean);
+}
+
+function updateExcludedInstanceSummary() {
+  if (!templateExcludeInstanceSummary) return;
+  const selectedIds = getSelectedExcludedInstanceIds();
+  if (!selectedIds.length) {
+    templateExcludeInstanceSummary.textContent = t('excludedInstanceNone');
+    return;
+  }
+  if (selectedIds.length === instances.length) {
+    templateExcludeInstanceSummary.textContent = t('allInstancesSelected');
+    return;
+  }
+  const selectedNames = selectedIds
+    .map((id) => instances.find((inst) => inst.id === id)?.name || id)
+    .slice(0, 2);
+  const remaining = selectedIds.length - selectedNames.length;
+  templateExcludeInstanceSummary.textContent = remaining > 0
+    ? `${selectedNames.join(', ')} +${remaining}`
+    : selectedNames.join(', ');
+}
+
+async function updateAliasExportSummary() {
+  if (!aliasRemainingSummary || !aliasSuggestedSplitSummary) return;
+  if (!templateAliasVariantCount) {
+    aliasRemainingSummary.textContent = '';
+    aliasSuggestedSplitSummary.textContent = '';
+    return;
+  }
+
+  const manualExcluded = new Set(
+    String(templateExcludedAliases?.value || '')
+      .split(';')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const selectedInstanceIds = getSelectedExcludedInstanceIds();
+  for (const instanceId of selectedInstanceIds) {
+    const accounts = await window.txw.getInstanceAccounts(instanceId);
+    for (const account of accounts) {
+      if ((account.status || '').toLowerCase() === 'not-register' && account.email) {
+        manualExcluded.add(String(account.email).trim().toLowerCase());
+      }
+    }
+  }
+
+  const rootEmail = templateRootEmail?.value || '';
+  const matchedExcludedCount = [...manualExcluded].filter((email) => isAliasVariantOfRoot(rootEmail, email)).length;
+  const remaining = Math.max(0, templateAliasVariantCount - matchedExcludedCount);
+  aliasRemainingSummary.textContent = t('aliasRemainingCountMessage').replace('{count}', new Intl.NumberFormat('en-US').format(remaining));
+
+  const selectedInstanceCount = selectedInstanceIds.length;
+  if (selectedInstanceCount > 0 && remaining > 0) {
+    const suggestedEach = Math.max(1, Math.floor(remaining / selectedInstanceCount));
+    aliasSuggestedSplitSummary.textContent = t('aliasSuggestedSplitMessage')
+      .replace('{instances}', new Intl.NumberFormat('en-US').format(selectedInstanceCount))
+      .replace('{each}', new Intl.NumberFormat('en-US').format(suggestedEach));
+  } else {
+    aliasSuggestedSplitSummary.textContent = '';
+  }
 }
 
 function applyLanguage(language) {
@@ -787,7 +891,7 @@ async function showAccounts() {
     const filtered = filterAccountsByKeyword(items, searchValue);
 
     if (!filtered.length) {
-      const emptyKey = keyword ? 'noSearchResults' : tabEmptyKeys[tabType];
+      const emptyKey = searchValue.trim() ? 'noSearchResults' : tabEmptyKeys[tabType];
       return `<tr><td colspan="6">${t(emptyKey)}</td></tr>`;
     }
 
@@ -1142,9 +1246,10 @@ async function showAccounts() {
             await window.txw.toggleInstanceAccountStatus(selectedInstanceId, email, 'active');
           } else if (action === 'move-selected-not-register') {
             await window.txw.toggleInstanceAccountStatus(selectedInstanceId, email, 'not-register');
-          } else if (action === 'delete-selected') {
-            await window.txw.deleteInstanceAccount(selectedInstanceId, email);
           }
+        }
+        if (action === 'delete-selected') {
+          await window.txw.deleteInstanceAccounts(selectedInstanceId, emails);
         }
         accountSelectionState[activeTabState]?.clear();
         await refreshInstances();
@@ -1875,14 +1980,41 @@ confirmEmulatorDialog.addEventListener('click', () => {
 // Download Excel Template
 downloadTemplateButton?.addEventListener('click', () => {
   if (templateRootEmail) templateRootEmail.value = '';
+  templateAliasVariantCount = 0;
+  if (aliasVariantSummary) aliasVariantSummary.textContent = '';
+  if (aliasRemainingSummary) aliasRemainingSummary.textContent = '';
+  if (aliasSuggestedSplitSummary) aliasSuggestedSplitSummary.textContent = '';
+  if (aliasConfigPanel) aliasConfigPanel.style.display = 'none';
+  if (templateAliasLimit) templateAliasLimit.value = '2048';
   if (templateExcludedAliases) templateExcludedAliases.value = '';
-  if (templateExcludeInstanceSelect) {
-    const optionHtml = instances.map((inst) => `<option value="${inst.id}">${inst.name || inst.id}</option>`).join('');
-    templateExcludeInstanceSelect.innerHTML = optionHtml;
-    for (const option of templateExcludeInstanceSelect.options) {
-      option.selected = false;
+  if (confirmTemplateChoiceDialog) {
+    confirmTemplateChoiceDialog.disabled = true;
+  }
+  if (templateExcludeInstancePicker) {
+    templateExcludeInstancePicker.open = false;
+  }
+  if (templateExcludeAllInstances) {
+    templateExcludeAllInstances.checked = false;
+  }
+  if (templateExcludeInstanceOptions) {
+    templateExcludeInstanceOptions.innerHTML = instances.map((inst) => `
+      <label style="display:flex; gap:8px; align-items:center;">
+        <input type="checkbox" data-instance-id="${inst.id}" style="width:auto; height:auto; accent-color:#d1a8ff;">
+        <span>${inst.name || inst.id}</span>
+      </label>
+    `).join('');
+    for (const checkbox of templateExcludeInstanceOptions.querySelectorAll('input[type="checkbox"][data-instance-id]')) {
+      checkbox.addEventListener('change', async () => {
+        const selectedCount = getSelectedExcludedInstanceIds().length;
+        if (templateExcludeAllInstances) {
+          templateExcludeAllInstances.checked = instances.length > 0 && selectedCount === instances.length;
+        }
+        updateExcludedInstanceSummary();
+        await updateAliasExportSummary();
+      });
     }
   }
+  updateExcludedInstanceSummary();
   if (rootEmailContainer) rootEmailContainer.style.display = 'none';
   const defaultRadio = document.querySelector('input[name="templateType"][value="created"]');
   if (defaultRadio) defaultRadio.checked = true;
@@ -1895,7 +2027,62 @@ document.querySelectorAll('input[name="templateType"]').forEach((radio) => {
     if (rootEmailContainer) {
       rootEmailContainer.style.display = e.target.value === 'uncreated' ? 'flex' : 'none';
     }
+    if (confirmTemplateChoiceDialog) {
+      confirmTemplateChoiceDialog.disabled = e.target.value === 'uncreated';
+    }
   });
+});
+
+checkAliasVariantsButton?.addEventListener('click', () => {
+  const rootEmail = templateRootEmail?.value || '';
+  const variantCount = calculateAliasVariantCount(rootEmail);
+  templateAliasVariantCount = variantCount;
+
+  if (!variantCount) {
+    if (aliasVariantSummary) {
+      aliasVariantSummary.textContent = t('aliasVariantInvalidEmail');
+    }
+    if (aliasConfigPanel) {
+      aliasConfigPanel.style.display = 'none';
+    }
+    if (confirmTemplateChoiceDialog) {
+      confirmTemplateChoiceDialog.disabled = true;
+    }
+    return;
+  }
+
+  if (aliasVariantSummary) {
+    aliasVariantSummary.textContent = t('aliasVariantCountMessage').replace('{count}', new Intl.NumberFormat('en-US').format(variantCount));
+  }
+  if (aliasConfigPanel) {
+    aliasConfigPanel.style.display = 'flex';
+  }
+  if (templateAliasLimit) {
+    const suggested = Math.min(2048, variantCount);
+    templateAliasLimit.value = String(suggested);
+    templateAliasLimit.max = String(Math.min(2048, variantCount));
+  }
+  updateAliasExportSummary();
+  if (confirmTemplateChoiceDialog) {
+    confirmTemplateChoiceDialog.disabled = false;
+  }
+});
+
+templateExcludeAllInstances?.addEventListener('change', async () => {
+  if (!templateExcludeInstanceOptions) return;
+  for (const checkbox of templateExcludeInstanceOptions.querySelectorAll('input[type="checkbox"][data-instance-id]')) {
+    checkbox.checked = templateExcludeAllInstances.checked;
+  }
+  updateExcludedInstanceSummary();
+  await updateAliasExportSummary();
+});
+
+templateExcludedAliases?.addEventListener('input', () => {
+  updateAliasExportSummary();
+});
+
+templateAliasLimit?.addEventListener('input', () => {
+  updateAliasExportSummary();
 });
 
 // Download Template Choice Dialog Modal Events
@@ -1906,10 +2093,10 @@ confirmTemplateChoiceDialog?.addEventListener('click', async () => {
   templateChoiceDialog.close();
   const templateType = document.querySelector('input[name="templateType"]:checked')?.value || 'created';
   const rootEmail = templateRootEmail?.value || '';
+  const aliasLimitMax = Math.min(2048, templateAliasVariantCount || 2048);
+  const aliasLimit = Math.min(aliasLimitMax, Math.max(1, Number.parseInt(templateAliasLimit?.value || '2048', 10) || 2048));
   const excludedAliases = templateExcludedAliases?.value || '';
-  const excludedInstanceIds = templateExcludeInstanceSelect
-    ? [...templateExcludeInstanceSelect.selectedOptions].map((option) => option.value).filter(Boolean)
-    : [];
+  const excludedInstanceIds = getSelectedExcludedInstanceIds();
   let mergedExcludedAliases = excludedAliases;
 
   if (templateType === 'uncreated' && excludedInstanceIds.length) {
@@ -1926,7 +2113,7 @@ confirmTemplateChoiceDialog?.addEventListener('click', async () => {
     mergedExcludedAliases = [excludedAliases, ...excludedInstanceAliasChunks].filter(Boolean).join(';');
   }
 
-  const result = await window.txw.downloadTemplate(currentLanguage, templateType, rootEmail, mergedExcludedAliases);
+  const result = await window.txw.downloadTemplate(currentLanguage, templateType, rootEmail, mergedExcludedAliases, aliasLimit);
 
   if (!result || result.cancelled) {
     openModal(t('downloadTemplateDoneTitle'), `<p>${t('downloadTemplateCancelled')}</p>`);

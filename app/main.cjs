@@ -1531,6 +1531,34 @@ ipcMain.handle('instances:delete-account', async (_event, instanceId, email) => 
   };
 });
 
+ipcMain.handle('instances:delete-accounts', async (_event, instanceId, emails = []) => {
+  const targetEmails = new Set(
+    Array.isArray(emails)
+      ? emails.map((email) => String(email || '').trim().toLowerCase()).filter(Boolean)
+      : []
+  );
+
+  if (!targetEmails.size) {
+    throw new Error('Missing account emails');
+  }
+
+  const accounts = await readAccounts(instanceId);
+  const nextAccounts = accounts.filter((entry) => !targetEmails.has(String(entry.email || '').trim().toLowerCase()));
+  const deletedCount = accounts.length - nextAccounts.length;
+
+  if (deletedCount <= 0) {
+    throw new Error('Accounts not found');
+  }
+
+  await saveAccounts(instanceId, nextAccounts);
+  send('data-updated', { instanceId });
+
+  return {
+    ok: true,
+    deletedCount
+  };
+});
+
 function generateDotTrickEmails(rootEmail, maxLimit = 2048) {
   const parts = String(rootEmail || '').trim().split('@');
   if (parts.length !== 2) return [];
@@ -1563,7 +1591,7 @@ function generateDotTrickEmails(rootEmail, maxLimit = 2048) {
   return results;
 }
 
-ipcMain.handle('instances:download-template', async (_event, language = 'vi', templateType = 'created', rootEmail = '', excludedAliasesRaw = '') => {
+ipcMain.handle('instances:download-template', async (_event, language = 'vi', templateType = 'created', rootEmail = '', excludedAliasesRaw = '', aliasLimitRaw = 2048) => {
   const isAlias = templateType === 'uncreated';
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Save account import template',
@@ -1630,6 +1658,7 @@ ipcMain.handle('instances:download-template', async (_event, language = 'vi', te
 
   let rows = [];
   let colWidths = [];
+  const aliasLimit = Math.min(2048, Math.max(1, Number.parseInt(aliasLimitRaw, 10) || 2048));
   const excludedAliases = new Set(
     String(excludedAliasesRaw || '')
       .split(';')
@@ -1638,7 +1667,7 @@ ipcMain.handle('instances:download-template', async (_event, language = 'vi', te
   );
 
   if (isAlias) {
-    const generated = generateDotTrickEmails(rootEmail).filter((email) => !excludedAliases.has(String(email || '').trim().toLowerCase()));
+    const generated = generateDotTrickEmails(rootEmail, aliasLimit).filter((email) => !excludedAliases.has(String(email || '').trim().toLowerCase()));
     if (generated && generated.length > 0) {
       // If root email was valid, export the clean generated list straight to Excel!
       rows = [
