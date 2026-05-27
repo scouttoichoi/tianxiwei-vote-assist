@@ -683,24 +683,7 @@ async function showAccounts() {
               ${t('activateAccount')}
             </button>
           ` : `
-            <button
-              type="button"
-              class="miniButton"
-              style="background: linear-gradient(135deg, #2e7d32, #4caf50); border: none;"
-              data-toggle-status-email="${account.email || ''}"
-              data-new-status="active"
-            >
-              ${t('activateAccount')}
-            </button>
-            <button
-              type="button"
-              class="miniButton"
-              style="background: linear-gradient(135deg, #d32f2f, #f44336); border: none;"
-              data-toggle-status-email="${account.email || ''}"
-              data-new-status="deactive"
-            >
-              ${t('deactivateAccount')}
-            </button>
+            -
           `}
         </div>
       </td>
