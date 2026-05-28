@@ -3,8 +3,12 @@ import { simpleParser } from 'mailparser';
 import { chromium } from 'playwright';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 
 const POLL_INTERVAL_MS = 5000; // Quét lại sau mỗi 5 giây
+
+// Cache lưu trữ các kết nối IMAP trường tồn
+const activeClients = new Map();
 
 // Tải tất cả cấu hình Gmail từ file vote-assist.config.json cục bộ
 async function loadGmailConfigs() {
@@ -161,29 +165,53 @@ async function authenticateBugsLink(authUrl) {
   }
 }
 
+// Khởi tạo hoặc tái sử dụng kết nối IMAP trường tồn
+async function getOrCreateConnectedClient(gmailConfig) {
+  let client = activeClients.get(gmailConfig.user);
+
+  // Nếu kết nối cũ không còn khả dụng, tiến hành dọn dẹp và kết nối lại
+  if (client && !client.usable) {
+    console.log(`🔌 [IMAP] Kết nối tới ${gmailConfig.user} đã bị ngắt. Đang kết nối lại...`);
+    try { await client.logout(); } catch {}
+    activeClients.delete(gmailConfig.user);
+    client = null;
+  }
+
+  if (!client) {
+    client = new ImapFlow({
+      host: 'imap.gmail.com',
+      port: 993,
+      secure: true,
+      auth: {
+        user: gmailConfig.user,
+        pass: gmailConfig.pass
+      },
+      logger: false
+    });
+
+    console.log(`🔌 [IMAP] Đang thiết lập kết nối TRƯỜNG TỒN (Persistent Connection) tới: ${gmailConfig.user}...`);
+    await client.connect();
+    console.log(`✅ [IMAP] Đã đăng nhập thành công vào ${gmailConfig.user}.`);
+    activeClients.set(gmailConfig.user, client);
+  }
+
+  return client;
+}
+
 // Xử lý quét và xác thực cho 1 tài khoản Gmail cụ thể
 async function processGmailAccount(gmailConfig) {
-  const client = new ImapFlow({
-    host: 'imap.gmail.com',
-    port: 993,
-    secure: true,
-    auth: {
-      user: gmailConfig.user,
-      pass: gmailConfig.pass
-    },
-    logger: false
-  });
-
   const timeStr = new Date().toLocaleTimeString();
+  let client = null;
 
   try {
-    await client.connect();
+    // Lấy kết nối trường tồn từ cache
+    client = await getOrCreateConnectedClient(gmailConfig);
 
     let lock = await client.getMailboxLock('INBOX');
     try {
       const messages = await client.search({ unseen: true, from: 'admin@bugs.co.kr' });
 
-      // Log siêu gọn nếu không có thư mới để đỡ rác màn hình Terminal
+      // Log siêu gọn nếu không có thư mới
       if (messages.length === 0) {
         console.log(`[${timeStr}] 📬 [${gmailConfig.user}] Trạng thái: Yên lặng (0 thư mới từ admin@bugs.co.kr)`);
         return;
@@ -254,10 +282,13 @@ async function processGmailAccount(gmailConfig) {
     } finally {
       lock.release();
     }
-
-    await client.logout();
   } catch (error) {
-    console.error(`[${timeStr}] ❌ Lỗi khi kết nối hòm thư ${gmailConfig.user}: ${error.message}`);
+    console.error(`[${timeStr}] ❌ Lỗi khi quét hòm thư ${gmailConfig.user}: ${error.message}`);
+    // Đứt kết nối hoặc lỗi socket -> Xóa kết nối cache để chu kỳ sau robot tự kết nối lại
+    activeClients.delete(gmailConfig.user);
+    if (client) {
+      try { await client.logout(); } catch {}
+    }
   }
 }
 
@@ -265,6 +296,7 @@ async function main() {
   console.log(`=======================================================`);
   console.log(`🚀 KHỞI CHẠY THIẾT BỊ LỌC VÀ XÁC THỰC EMAIL TỰ ĐỘNG`);
   console.log(`⏱️  Chế độ: Chạy liên tục (Quét tuần hoàn mỗi 5 giây)`);
+  console.log(`📡 Kết nối: Trường tồn (Persistent Connection - Không rớt session)`);
   console.log(`=======================================================`);
 
   // 1. Nạp tất cả cấu hình Gmail

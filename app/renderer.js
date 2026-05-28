@@ -200,7 +200,7 @@ async function updateAliasExportSummary() {
   for (const instanceId of selectedInstanceIds) {
     const accounts = await window.txw.getInstanceAccounts(instanceId);
     for (const account of accounts) {
-      if ((account.status || '').toLowerCase() === 'not-register' && account.email) {
+      if (account.email) {
         manualExcluded.add(String(account.email).trim().toLowerCase());
       }
     }
@@ -2137,11 +2137,10 @@ confirmTemplateChoiceDialog?.addEventListener('click', async () => {
     const excludedInstanceAliasChunks = [];
     for (const instanceId of excludedInstanceIds) {
       const excludedInstanceAccounts = await window.txw.getInstanceAccounts(instanceId);
-      const excludedInstanceNotRegisterEmails = excludedInstanceAccounts
-        .filter((account) => (account.status || '').toLowerCase() === 'not-register')
+      const excludedInstanceEmails = excludedInstanceAccounts
         .map((account) => String(account.email || '').trim())
         .filter(Boolean);
-      excludedInstanceAliasChunks.push(...excludedInstanceNotRegisterEmails);
+      excludedInstanceAliasChunks.push(...excludedInstanceEmails);
     }
 
     mergedExcludedAliases = [excludedAliases, ...excludedInstanceAliasChunks].filter(Boolean).join(';');
