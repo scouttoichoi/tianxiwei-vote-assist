@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hướng Dẫn Sử Dụng Tian Xiwei Vote Assist</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-dark: #0f0a08;
+      --bg-card: rgba(28, 21, 19, 0.75);
+      --bg-panel: rgba(16, 12, 10, 0.5);
+      --primary-color: #ffd3b6;
+      --accent-color: #d1a8ff;
+      --text-main: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.7);
+      --text-dim: rgba(255, 255, 255, 0.4);
+      --border: rgba(255, 255, 255, 0.08);
+      --font-outfit: 'Outfit', sans-serif;
+      --font-inter: 'Inter', sans-serif;
+      --transition: all 0.2s ease-in-out;
+    }
+
+    * {
+      box-sizing: border-box;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-inter);
+      font-size: 14px;
+      line-height: 1.6;
+      background-image: 
+        linear-gradient(135deg, rgba(20, 10, 8, 0.6), rgba(15, 10, 25, 0.5) 60%, rgba(10, 5, 15, 0.7)),
+        radial-gradient(circle at 90% 10%, rgba(209, 168, 255, 0.08) 0%, transparent 40%);
+      background-attachment: fixed;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(209, 168, 255, 0.3);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      height: 100vh;
+      position: fixed;
+      left: 0;
+      top: 0;
+      background: rgba(16, 12, 10, 0.85);
+      border-right: 1px solid var(--border);
+      backdrop-filter: blur(20px);
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+    }
+
+    .brand-area {
+      padding: 8px 12px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 20px;
+    }
+
+    .brand-title {
+      font-family: var(--font-outfit);
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+      background: linear-gradient(90deg, #ffd3b6, #d1a8ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-subtitle {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--accent-color);
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .nav-item a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 500;
+      font-size: 13px;
+      transition: var(--transition);
+    }
+
+    .nav-item a:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+    }
+
+    .nav-item.active a {
+      background: rgba(209, 168, 255, 0.1);
+      color: #ffffff;
+      font-weight: 600;
+      border-left: 3px solid var(--accent-color);
+    }
+
+    /* Main Content */
+    .main-content {
+      margin-left: 280px;
+      flex: 1;
+      padding: 40px 50px;
+      max-width: 1200px;
+    }
+
+    .page-header {
+      margin-bottom: 30px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+    }
+
+    .page-title {
+      font-family: var(--font-outfit);
+      font-size: 28px;
+      font-weight: 800;
+      margin: 0 0 6px;
+      background: linear-gradient(90deg, #ffffff, #ffd3b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .page-subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin: 0;
+    }
+
+    /* Step Workflows */
+    .flow-section {
+      margin-bottom: 50px;
+      scroll-margin-top: 30px;
+    }
+
+    .flow-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .flow-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 12px;
+    }
+
+    .flow-num {
+      width: 36px;
+      height: 36px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--primary-color);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-outfit);
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .flow-title {
+      font-family: var(--font-outfit);
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0;
+      color: #fff;
+    }
+
+    .flow-intro {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    /* Live Interface Mockup (Exact match of real app) */
+    .app-preview-container {
+      background: #100b09;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 16px;
+      margin: 20px 0;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+      font-family: Inter, sans-serif;
+    }
+
+    .preview-header {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255, 255, 255, 0.3);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .preview-dot {
+      width: 6px;
+      height: 6px;
+      background: #ffd3b6;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #ffd3b6;
+    }
+
+    .app-window {
+      background: #1c1512;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Topbar */
+    .app-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      background: rgba(16, 12, 10, 0.4);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .app-logo {
+      font-size: 15px;
+      font-weight: 800;
+      color: #ffd3b6;
+      background: linear-gradient(90deg, #ffd3b6, #d1a8ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .app-badge {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: rgba(209, 168, 255, 0.2);
+      color: #d1a8ff;
+      padding: 2px 5px;
+      border-radius: 4px;
+      border: 1px solid rgba(209, 168, 255, 0.3);
+      -webkit-text-fill-color: #d1a8ff;
+    }
+
+    .app-topbar-right {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .app-lang-select {
+      background: #1a1512;
+      color: #fff;
+      font-size: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .app-topbar-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    /* Layout structure */
+    .app-workspace {
+      display: flex;
+      min-height: 520px;
+    }
+
+    /* Left Panel */
+    .app-left {
+      width: 58%;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 16px;
+      background: rgba(10, 8, 7, 0.3);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .app-left-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .app-left-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .app-btn-add {
+      background: #fff;
+      color: #1b1714;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+    }
+
+    .app-global-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .app-ctrl-btn {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 5px 9px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #a8ffcc;
+      border: 1px solid rgba(92, 181, 137, 0.3);
+    }
+
+    .app-ctrl-btn.stop {
+      border-color: rgba(199, 48, 48, 0.3);
+      color: #ffb3b3;
+    }
+
+    .app-table {
+      width: 100%;
+      font-size: 11px;
+      border-collapse: separate;
+      border-spacing: 0 4px;
+    }
+
+    .app-table th {
+      color: rgba(255, 255, 255, 0.4);
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      font-size: 9px;
+      text-align: left;
+    }
+
+    .app-table td {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 10px 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .app-table tr.selected td {
+      background: rgba(209, 168, 255, 0.09);
+      border-color: rgba(209, 168, 255, 0.3);
+    }
+
+    .app-table tr.selected td:first-child {
+      border-left: 3px solid #d1a8ff;
+    }
+
+    .app-status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 9.5px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .app-status-badge::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.5);
+      margin-right: 4px;
+      display: inline-block;
+    }
+
+    .app-action-icon {
+      width: 18px;
+      height: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 2px;
+      font-size: 10px;
+    }
+
+    /* Right Panel (Dashboard) */
+    .app-right {
+      width: 42%;
+      background: rgba(14, 10, 8, 0.4);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .app-right-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      margin: 0 0 2px;
+    }
+
+    .app-right-proxy {
+      font-size: 10px;
+      color: var(--accent-color);
+      margin-bottom: 10px;
+    }
+
+    .app-score-band {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+
+    .app-score-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 6px 4px;
+      border-radius: 6px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .app-score-lbl {
+      font-size: 7.5px;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .app-score-val {
+      font-size: 12px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    /* Real Dashboard Grid Layout */
+    .app-btn-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .app-grid-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .real-btn {
+      border-radius: 5px;
+      padding: 8px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      transition: var(--transition);
+    }
+
+    .real-btn:hover {
+      opacity: 0.9;
+    }
+
+    .real-btn span {
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .real-btn small {
+      font-size: 8px;
+      opacity: 0.85;
+      margin-top: 1px;
+      font-weight: 500;
+      line-height: 1.1;
+    }
+
+    /* Authentic styling classes */
+    .btn-real-signup {
+      background: #ffffff;
+      color: #000000;
+    }
+
+    .btn-real-login {
+      background: #5c43b5;
+      color: #ffffff;
+    }
+
+    .btn-real-alias {
+      background: #1b7bc8;
+      color: #ffffff;
+    }
+
+    .btn-real-manual {
+      background: #423d3a;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .btn-real-ads {
+      background: #bf16d9;
+      color: #ffffff;
+      padding: 10px;
+    }
+
+    .app-data-row-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 5px;
+      margin-bottom: 6px;
+    }
+
+    .app-data-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      margin-bottom: 12px;
+    }
+
+    .real-mini-btn {
+      background: #38322f;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 2px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .real-log-panel {
+      flex: 1;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 140px;
+    }
+
+    .real-log-header {
+      font-size: 10px;
+      font-weight: 800;
+      color: rgba(255, 255, 255, 0.4);
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .real-log-body {
+      padding: 10px 12px;
+      font-family: monospace;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    /* Highlight border class */
+    .highlight-border {
+      border: 2px dashed #d1a8ff !important;
+      box-shadow: 0 0 10px rgba(209, 168, 255, 0.4);
+    }
+
+    /* Steps Design */
+    .steps-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 15px;
+    }
+
+    .step-card {
+      display: flex;
+      gap: 14px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 8px;
+      transition: var(--transition);
+    }
+
+    .step-card:hover {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(209, 168, 255, 0.15);
+      transform: translateX(4px);
+    }
+
+    .step-badge {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(90deg, #ffd3b6, #d1a8ff);
+      color: #1a0b2e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .step-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .step-desc strong {
+      color: #fff;
+    }
+
+    /* Alerts */
+    .alert-box {
+      margin-top: 20px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      display: flex;
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .alert-box.tip {
+      background: rgba(168, 255, 204, 0.08);
+      border: 1px solid rgba(168, 255, 204, 0.2);
+      color: #e2ffe8;
+    }
+
+    .alert-box.warning {
+      background: rgba(255, 179, 179, 0.08);
+      border: 1px solid rgba(255, 179, 179, 0.2);
+      color: #ffe4e4;
+    }
+
+    .alert-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .alert-content strong {
+      display: block;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      font-size: 11.5px;
+      letter-spacing: 0.5px;
+    }
+
+    .highlight-txt {
+      color: #ffd3b6;
+      font-weight: 600;
+    }
+
+    @media (max-width: 1024px) {
+      .sidebar { display: none; }
+      .main-content { margin-left: 0; padding: 24px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand-area">
+      <div class="brand-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 4px var(--accent-color));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        TIAN VOTE ASSIST
+      </div>
+      <div class="brand-subtitle">Cẩm Nang Vận Hành</div>
+    </div>
+    
+    <ul class="nav-list">
+      <li class="nav-item active" data-target="gioi-thieu">
+        <a href="#gioi-thieu">💡 Giới thiệu chung</a>
+      </li>
+      <li class="nav-item" data-target="quy-trinh-1">
+        <a href="#quy-trinh-1">⚙️ Q.Trình 1: Tạo & Quản lý Luồng</a>
+      </li>
+      <li class="nav-item" data-target="quy-trinh-2">
+        <a href="#quy-trinh-2">🤖 Q.Trình 2: Đăng ký & Vote Mới</a>
+      </li>
+      <li class="nav-item" data-target="quy-trinh-3">
+        <a href="#quy-trinh-3">🎭 Q.Trình 3: Sinh & Tạo từ Alias</a>
+      </li>
+      <li class="nav-item" data-target="quy-trinh-4">
+        <a href="#quy-trinh-4">🔑 Q.Trình 4: Vote bằng nick cũ</a>
+      </li>
+      <li class="nav-item" data-target="quy-trinh-5">
+        <a href="#quy-trinh-5">📲 Q.Trình 5: Nuôi tim máy ảo</a>
+      </li>
+      <li class="nav-item" data-target="tinh-nang-an-toan">
+        <a href="#tinh-nang-an-toan">🛡️ Cơ chế ngắt an toàn IP</a>
+      </li>
+      <li class="nav-item" data-target="su-co-thuong-gap">
+        <a href="#su-co-thuong-gap">🛠️ Khắc phục sự có nhanh</a>
+      </li>
+    </ul>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    
+    <header class="page-header">
+      <h1 class="page-title">Sách Hướng Dẫn Sử Dụng Chi Tiết</h1>
+      <p class="page-subtitle">Cẩm nang chuẩn hóa dành riêng cho các thành viên trong chiến dịch Vote TIAN Xiwei</p>
+    </header>
+
+    <!-- INTRODUCTION -->
+    <section id="gioi-thieu" class="flow-section">
+      <div class="flow-card">
+        <div class="flow-header">
+          <div class="flow-num">★</div>
+          <h2 class="flow-title">Chào mừng bạn đến với chiến dịch Vote TIAN Xiwei!</h2>
+        </div>
+        <p class="flow-intro">
+          Sổ tay hướng dẫn này được tối giản hóa mọi từ ngữ kỹ thuật phức tạp, cung cấp cho bạn từng bước trực quan để điều khiển phần mềm một cách chuẩn xác nhất. 
+          Bên dưới mỗi quy trình là mô phỏng giao diện chuẩn khớp 100% với phiên bản phần mềm thực tế bạn đang chạy để bạn dễ dàng làm theo.
+        </p>
+      </div>
+    </section>
+
+    <!-- FLOW 1: INSTANCE MANAGEMENT -->
+    <section id="quy-trinh-1" class="flow-section">
+      <div class="flow-card">
+        <div class="flow-header">
+          <div class="flow-num">01</div>
+          <h2 class="flow-title">Quy Trình 1: Thiết Lập & Quản Lý Các Luồng Chạy (Instances)</h2>
+        </div>
+        
+        <p class="flow-intro">
+          Để chạy nhiều tài khoản bỏ phiếu song song mà không bị Bugs chặn mạng, bạn cần chia tài khoản của mình vào các "luồng chạy" độc lập. Mỗi luồng chạy nên gán một địa chỉ mạng riêng (Proxy) để đảm bảo an toàn tối đa cho tài khoản.
+        </p>
+
+        <!-- Simulated Left side of the app -->
+        <div class="app-preview-container">
+          <div class="preview-header"><span class="preview-dot"></span> BẢN MÔ PHỎNG: DANH SÁCH LUỒNG CHẠY (BÊN TRÁI MÀN HÌNH)</div>
+          <div class="app-window">
+            <div class="app-topbar">
+              <span class="app-logo">Tian Xiwei Vote Assist <span class="app-badge">MULTI-INSTANCE</span></span>
+              <div class="app-topbar-right">
+                <span class="app-lang-select">Tiếng Việt</span>
+                <span class="app-topbar-btn">Hướng dẫn sử dụng</span>
+              </div>
+            </div>
+            
+            <div class="app-left" style="width: 100%;">
+              <div class="app-left-header">
+                <span class="app-left-title">Danh sách phiên bản (Instances)</span>
+                <button class="app-btn-add highlight-border">Thêm phiên bản</button>
+              </div>
+              <div class="app-global-controls">
+                <span class="app-ctrl-btn">Chạy Đăng ký Tự động tất cả</span>
+                <span class="app-ctrl-btn">Chạy Đăng ký Thủ công tất cả</span>
+                <span class="app-ctrl-btn">Chạy Đăng ký Aliases tất cả</span>
+                <span class="app-ctrl-btn">Chạy Tài khoản cũ tất cả</span>
+                <span class="app-ctrl-btn stop">Dừng tất cả</span>
+              </div>
+              <table class="app-table">
+                <thead>
+                  <tr>
+                    <th>Tên phiên bản</th>
+                    <th>Proxy</th>
+                    <th>Đã Vote / Active</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="selected">
+                    <td style="font-weight: 700; color: #ffd3b6;">Bản gốc (Legacy)</td>
+                    <td>-</td>
+                    <td>4 / 58</td>
+                    <td><span class="app-status-badge">Đang rảnh</span></td>
+                    <td>
+                      <span class="app-action-icon" style="color: #ffd3b6;">✏️</span>
+                      <span class="app-action-icon" style="color: #ffb3b3;">🗑️</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: 700;">Đăng ký tự động - 1</td>
+                    <td>-</td>
+                    <td>5 / 39</td>
+                    <td><span class="app-status-badge">Đang rảnh</span></td>
+                    <td>
+                      <span class="app-action-icon">✏️</span>
+                      <span class="app-action-icon">🗑️</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="steps-container">
+          <div class="step-card">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <div class="step-title">Tạo luồng chạy mới</div>
+              <p class="step-desc">Bấm vào nút <strong class="highlight-txt">Thêm phiên bản</strong> ở bên phải tiêu đề danh sách luồng chạy.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <div class="step-title">Cấu hình Tên & Mạng riêng (Proxy)</div>
+              <p class="step-desc">Điền tên dễ nhớ (ví dụ: <code>Đăng ký tự động - 1</code>) và dán địa chỉ Proxy của bạn vào (định dạng <code>ip:port</code> hoặc <code>user:pass@ip:port</code>). Bấm <strong>Lưu</strong>.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <div class="step-title">Sửa đổi cấu hình luồng</div>
+              <p class="step-desc">Nhấp chọn luồng vừa tạo để hiện viền sáng bao quanh. Bạn có thể nhấn icon <strong>Bút chì</strong> để chỉnh sửa Proxy, hoặc bấm icon <strong>Thùng rác</strong> để xóa luồng chạy đó.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLOW 2: AUTO & MANUAL SIGNUP -->
+    <section id="quy-trinh-2" class="flow-section">
+      <div class="flow-card">
+        <div class="flow-header">
+          <div class="flow-num">02</div>
+          <h2 class="flow-title">Quy Trình 2: Đăng Ký Tài Khoản Mới & Vote Tự Động (AI Giải Hoặc Tự Nhập Captcha)</h2>
+        </div>
+        
+        <p class="flow-intro">
+          Quy trình này áp dụng khi bạn muốn tạo hàng loạt nick Bugs mới thông qua hòm thư ảo. Phần mềm sẽ tự động lấy email, điền mật khẩu và thực hiện kích hoạt để vote ngay lập tức.
+        </p>
+
+        <!-- Simulated Right side of the app with HIGHLIGHTS -->
+        <div class="app-preview-container">
+          <div class="preview-header"><span class="preview-dot"></span> BẢN MÔ PHỎNG: BẢNG ĐIỀU KHIỂN CHỨC NĂNG (BÊN PHẢI MÀN HÌNH)</div>
+          <div class="app-window">
+            <div class="app-right" style="width: 100%;">
+              <div class="app-right-title">Bản gốc (Legacy)</div>
+              <div class="app-right-proxy">Proxy: -</div>
+              <div class="app-score-band">
+                <div class="app-score-card">
+                  <div class="app-score-lbl">TIAN XIWEI</div>
+                  <div class="app-score-val">2,801,911</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">TOP 1</div>
+                  <div class="app-score-val">2,801,911</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">CHÊNH LỆCH</div>
+                  <div class="app-score-val">0</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">CẬP NHẬT GẦN N...</div>
+                  <div class="app-score-val" style="font-size: 8px; white-space: pre-line;">09:25:06&#10;28/05/2026</div>
+                </div>
+              </div>
+              
+              <div class="app-btn-grid">
+                <div class="app-grid-row-2">
+                  <div class="real-btn btn-real-signup highlight-border">
+                    <span>Đăng ký mới và Vote (tự động)</span>
+                    <small>Chạy liên tục đến khi bấm Dừng</small>
+                  </div>
+                  <div class="real-btn btn-real-login">
+                    <span>Vote bằng tài khoản cũ</span>
+                    <small>Chỉ chạy account chưa vote hôm nay</small>
+                  </div>
+                </div>
+                <div class="app-grid-row-2">
+                  <div class="real-btn btn-real-alias">
+                    <span>Đăng ký bằng Aliases</span>
+                    <small>Chọn số lượng tài khoản chưa đăng ký để đăng ký</small>
+                  </div>
+                  <div class="real-btn btn-real-manual highlight-border">
+                    <span>Đăng ký mới và Vote (tự nhập captcha)</span>
+                    <small>Tự nhập captcha trên Bugs</small>
+                  </div>
+                </div>
+                
+                <div class="real-btn btn-real-ads">
+                  <span>Xem quảng cáo kiếm tim</span>
+                  <small>Tự động chạy máy ảo xem ads 24/7</small>
+                </div>
+              </div>
+
+              <div class="app-data-row-3">
+                <div class="real-mini-btn">Import Excel</div>
+                <div class="real-mini-btn">Export Excel</div>
+                <div class="real-mini-btn">Tải template</div>
+              </div>
+              <div class="app-data-row-2">
+                <div class="real-mini-btn">Danh sách tài khoản</div>
+                <div class="real-mini-btn">Lịch sử điểm vote</div>
+              </div>
+
+              <div class="real-log-panel">
+                <div class="real-log-header">NHẬT KÝ CHẠY</div>
+                <div class="real-log-body">Chưa có tiến trình đang chạy.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="steps-container">
+          <div class="step-card">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <div class="step-title">Chọn luồng và Kích hoạt lệnh đăng ký</div>
+              <p class="step-desc">
+                Nhấp chọn luồng bên trái. Nhìn sang bảng bên phải:
+                <br>• Nếu muốn <strong>AI tự giải Captcha 100%</strong>: Bấm nút trắng <strong class="highlight-txt">Đăng ký mới và Vote (tự động)</strong>.
+                <br>• Nếu muốn <strong>Tự tay gõ Captcha</strong>: Bấm nút xám <strong class="highlight-txt">Đăng ký mới và Vote (tự nhập captcha)</strong>.
+              </p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <div class="step-title">Điền số lượng và Xử lý gõ Captcha</div>
+              <p class="step-desc">
+                Nhập số tài khoản mong muốn vào hộp thoại (ví dụ: <code>5</code>). 
+                Trình duyệt sẽ tự động bật lên lấy email, điền form. AI sẽ tự động chụp ảnh giải captcha và điền. 
+                Nếu bạn chọn chế độ tự nhập tay, trình duyệt sẽ tự động đưa mã captcha nổi lên và đặt con trỏ vào ô nhập, bạn chỉ cần gõ đúng chuỗi chữ hoa hiển thị rồi nhấn nút đăng ký.
+              </p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <div class="step-title">Tự động kích hoạt & Vote</div>
+              <p class="step-desc">Phần mềm tự động quay lại hòm thư, nhấp kích hoạt link xác minh được Bugs gửi tới, tiến hành đăng nhập và thực hiện vote đủ 5 tim cho TIAN Xiwei, sau đó lưu lại tài khoản.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLOW 3: ALIAS FLOW -->
+    <section id="quy-trinh-3" class="flow-section">
+      <div class="flow-card">
+        <div class="flow-header">
+          <div class="flow-num">03</div>
+          <h2 class="flow-title">Quy Trình 3: Tạo Danh Sách Email Alias & Đăng Ký Tài Khoản Số Lượng Lớn</h2>
+        </div>
+        
+        <p class="flow-intro">
+          <strong>Bản chất của Alias:</strong> Bạn chỉ cần duy nhất <strong>một địa chỉ Gmail chính</strong> (ví dụ: <code>tianxiwei@gmail.com</code>). 
+          Khi thêm dấu chấm vào tên email (ví dụ: <code>tian.xiwei@gmail.com</code>), Bugs sẽ nhận dạng đây là một tài khoản đăng ký mới tinh, nhưng thư kích hoạt của Bugs gửi đi vẫn tự động quy về hòm thư Gmail gốc duy nhất của bạn.
+        </p>
+
+        <!-- Mockup with highlighted alias & template buttons -->
+        <div class="app-preview-container">
+          <div class="preview-header"><span class="preview-dot"></span> BẢN MÔ PHỎNG: BẢNG CHỨC NĂNG ALIAS & TEMPLATE (BÊN PHẢI MÀN HÌNH)</div>
+          <div class="app-window">
+            <div class="app-right" style="width: 100%;">
+              <div class="app-right-title">Bản gốc (Legacy)</div>
+              <div class="app-right-proxy">Proxy: -</div>
+              <div class="app-score-band">
+                <div class="app-score-card">
+                  <div class="app-score-lbl">TIAN XIWEI</div>
+                  <div class="app-score-val">2,801,911</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">TOP 1</div>
+                  <div class="app-score-val">2,801,911</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">CHÊNH LỆCH</div>
+                  <div class="app-score-val">0</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">CẬP NHẬT GẦN N...</div>
+                  <div class="app-score-val" style="font-size: 8px;">09:25:06</div>
+                </div>
+              </div>
+              
+              <div class="app-btn-grid">
+                <div class="app-grid-row-2">
+                  <div class="real-btn btn-real-signup">
+                    <span>Đăng ký mới và Vote (tự động)</span>
+                    <small>Chạy liên tục đến khi bấm Dừng</small>
+                  </div>
+                  <div class="real-btn btn-real-login">
+                    <span>Vote bằng tài khoản cũ</span>
+                    <small>Chỉ chạy account chưa vote hôm nay</small>
+                  </div>
+                </div>
+                <div class="app-grid-row-2">
+                  <div class="real-btn btn-real-alias highlight-border">
+                    <span>Đăng ký bằng Aliases</span>
+                    <small>Chọn số lượng tài khoản chưa đăng ký để đăng ký</small>
+                  </div>
+                  <div class="real-btn btn-real-manual">
+                    <span>Đăng ký mới và Vote (tự nhập captcha)</span>
+                    <small>Tự nhập captcha trên Bugs</small>
+                  </div>
+                </div>
+                
+                <div class="real-btn btn-real-ads">
+                  <span>Xem quảng cáo kiếm tim</span>
+                  <small>Tự động chạy máy ảo xem ads 24/7</small>
+                </div>
+              </div>
+
+              <div class="app-data-row-3">
+                <div class="real-mini-btn highlight-border">Import Excel</div>
+                <div class="real-mini-btn">Export Excel</div>
+                <div class="real-mini-btn highlight-border">Tải template</div>
+              </div>
+              <div class="app-data-row-2">
+                <div class="real-mini-btn">Danh sách tài khoản</div>
+                <div class="real-mini-btn">Lịch sử điểm vote</div>
+              </div>
+
+              <div class="real-log-panel">
+                <div class="real-log-header">NHẬT KÝ CHẠY</div>
+                <div class="real-log-body">Chưa có tiến trình đang chạy.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="steps-container">
+          <div class="step-card" style="border-left: 3px solid var(--success);">
+            <div class="step-badge">B1</div>
+            <div class="step-content">
+              <div class="step-title" style="color: #a8ffcc;">BƯỚC BẮT BUỘC ĐẦU TIÊN: Tạo danh sách Alias & Tải Excel về máy</div>
+              <p class="step-desc">
+                Bạn không cần tự gõ dấu chấm! Hãy thực hiện các thao tác:
+                <br>1. Tại bảng bên phải, nhấp nút màu xám <strong class="highlight-txt">Tải template</strong> ở hàng dữ liệu.
+                <br>2. Một hộp thoại hiện ra, tích chọn mục <strong>"Template cho tài khoản chưa đăng ký / Gmail Alias"</strong>.
+                <br>3. Tại ô <strong>"Nhập email gốc"</strong>, hãy điền địa chỉ Gmail thật của bạn (Ví dụ: <code>myvote@gmail.com</code>).
+                <br>4. Nhấp nút <strong>"Kiểm tra biến thể"</strong> để phần mềm tự động tính toán số email tạo được.
+                <br>5. Đặt giới hạn tạo (tối đa 2048) và tick chọn các luồng chạy khác để hệ thống tự động lọc bỏ các email đã được dùng, tránh đăng ký trùng.
+                <br>6. Bấm nút <strong>"Tải xuống"</strong> để lưu tệp Excel chứa danh sách email alias tự động này về máy tính.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">B2</div>
+            <div class="step-content">
+              <div class="step-title">Nạp danh sách email Alias vừa tải vào ứng dụng</div>
+              <p class="step-desc">
+                Nhấp nút <strong class="highlight-txt">Import Excel</strong> ở bảng bên phải. Chọn dòng <strong>"Import danh sách tài khoản chưa tạo / gmail alias"</strong>, chọn tệp Excel vừa tải ở bước trước để nạp danh sách email alias chờ đăng ký vào luồng chạy.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">B3</div>
+            <div class="step-content">
+              <div class="step-title">Chạy đăng ký hàng loạt từ Alias</div>
+              <p class="step-desc">
+                Bấm nút xanh dương <strong class="highlight-txt">Đăng ký bằng Aliases</strong> ở bảng bên phải. 
+                Phần mềm sẽ tự động lấy các email alias trong danh sách ra để thực hiện quy trình đăng ký trên Bugs và giải captcha tự động. 
+                Sau khi đăng ký xong, tài khoản được lưu trạng thái thành hoạt động. 
+                Bạn chỉ cần đăng nhập vào hòm thư Gmail gốc và nhấp xác minh cho tất cả các thư kích hoạt gửi về là có thể mang nick đi vote hàng ngày!
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLOW 4: OLD ACCOUNTS VOTE -->
+    <section id="quy-trinh-4" class="flow-section">
+      <div class="flow-card">
+        <div class="flow-header">
+          <div class="flow-num">04</div>
+          <h2 class="flow-title">Quy Trình 4: Đăng Nhập & Vote Bằng Tài Khoản Cũ Đã Có Sẵn</h2>
+        </div>
+        
+        <p class="flow-intro">
+          Quy trình áp dụng hàng ngày khi bạn đã có sẵn danh sách tài khoản (hoặc sau khi đã kích hoạt xong danh sách email alias từ Quy trình 3). Hệ thống sẽ tự động đăng nhập từng nick và vote đủ 5 tim.
+        </p>
+
+        <!-- Simulated Right side panel matching real layout with highlights for LOGIN -->
+        <div class="app-preview-container">
+          <div class="preview-header"><span class="preview-dot"></span> BẢN MÔ PHỎNG: BẢNG CHỨC NĂNG VOTE NICK CŨ & IMPORT (BÊN PHẢI MÀN HÌNH)</div>
+          <div class="app-window">
+            <div class="app-right" style="width: 100%;">
+              <div class="app-right-title">Bản gốc (Legacy)</div>
+              <div class="app-right-proxy">Proxy: -</div>
+              <div class="app-score-band">
+                <div class="app-score-card">
+                  <div class="app-score-lbl">TIAN XIWEI</div>
+                  <div class="app-score-val">2,801,911</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">TOP 1</div>
+                  <div class="app-score-val">2,801,911</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">CHÊNH LỆCH</div>
+                  <div class="app-score-val">0</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">CẬP NHẬT GẦN N...</div>
+                  <div class="app-score-val" style="font-size: 8px;">09:25:06</div>
+                </div>
+              </div>
+              
+              <div class="app-btn-grid">
+                <div class="app-grid-row-2">
+                  <div class="real-btn btn-real-signup">
+                    <span>Đăng ký mới và Vote (tự động)</span>
+                    <small>Chạy liên tục đến khi bấm Dừng</small>
+                  </div>
+                  <div class="real-btn btn-real-login highlight-border">
+                    <span>Vote bằng tài khoản cũ</span>
+                    <small>Chỉ chạy account chưa vote hôm nay</small>
+                  </div>
+                </div>
+                <div class="app-grid-row-2">
+                  <div class="real-btn btn-real-alias">
+                    <span>Đăng ký bằng Aliases</span>
+                    <small>Chọn số lượng tài khoản chưa đăng ký để đăng ký</small>
+                  </div>
+                  <div class="real-btn btn-real-manual">
+                    <span>Đăng ký mới và Vote (tự nhập captcha)</span>
+                    <small>Tự nhập captcha trên Bugs</small>
+                  </div>
+                </div>
+                
+                <div class="real-btn btn-real-ads">
+                  <span>Xem quảng cáo kiếm tim</span>
+                  <small>Tự động chạy máy ảo xem ads 24/7</small>
+                </div>
+              </div>
+
+              <div class="app-data-row-3">
+                <div class="real-mini-btn highlight-border">Import Excel</div>
+                <div class="real-mini-btn">Export Excel</div>
+                <div class="real-mini-btn">Tải template</div>
+              </div>
+              <div class="app-data-row-2">
+                <div class="real-mini-btn">Danh sách tài khoản</div>
+                <div class="real-mini-btn">Lịch sử điểm vote</div>
+              </div>
+
+              <div class="real-log-panel">
+                <div class="real-log-header">NHẬT KÝ CHẠY</div>
+                <div class="real-log-body">Chưa có tiến trình đang chạy.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="steps-container">
+          <div class="step-card">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <div class="step-title">Nhập tài khoản từ file ngoài (Nếu cần)</div>
+              <p class="step-desc">
+                Nhấn chọn <strong>"Tải template"</strong> -> Chọn <strong>"Template cho tài khoản đã đăng ký"</strong>. 
+                Nhập nick vào file đó (3 cột: <code>user</code>, <code>pass</code>, <code>voted_today</code>). 
+                Tiếp tục, nhấp nút <strong class="highlight-txt">Import Excel</strong> -> chọn <strong>"Import danh sách tài khoản đã tạo"</strong> để nạp nick vào hệ thống.
+              </p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <div class="step-title">Khởi chạy vote</div>
+              <p class="step-desc">Bấm nút màu tím <strong class="highlight-txt">Vote bằng tài khoản cũ</strong> ở góc trên bên phải của bảng nút bấm. Công cụ tự động quét, loại bỏ các nick đã vote hôm nay và đưa các nick hợp lệ vào chuỗi chạy đăng nhập tự động.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <div class="step-title">Xóa dấu vết an toàn</div>
+              <p class="step-desc">Trình duyệt tự động mở, đăng nhập nick, vượt lưới bảo vệ Cloudflare nếu gặp, vào mục vote TIAN Xiwei bỏ 5 tim. Sau khi hoàn thành, toàn bộ cookie được xóa sạch để chạy tài khoản tiếp theo một cách an toàn.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FLOW 5: ADS FARM -->
+    <section id="quy-trinh-5" class="flow-section">
+      <div class="flow-card">
+        <div class="flow-header">
+          <div class="flow-num">05</div>
+          <h2 class="flow-title">Quy Trình 5: Nuôi Tim Tích Lũy Miễn Phí Suốt 24/7 (Farm Ads Giả Lập)</h2>
+        </div>
+        
+        <p class="flow-intro">
+          Quy trình kiếm tim vote hoàn toàn miễn phí. Bằng cách kết nối trực tiếp đến phần mềm điện thoại ảo Android đang chạy trên máy tính, phần mềm tự động mở app Bugs xem quảng cáo để thu thập tim liên tục.
+        </p>
+
+        <!-- Simulated right panel highlighting ADS button -->
+        <div class="app-preview-container">
+          <div class="preview-header"><span class="preview-dot"></span> BẢN MÔ PHỎNG: NÚT TREO ADS MÁY ẢO (BÊN PHẢI MÀN HÌNH)</div>
+          <div class="app-window">
+            <div class="app-right" style="width: 100%;">
+              <div class="app-right-title">Bản gốc (Legacy)</div>
+              <div class="app-right-proxy">Proxy: -</div>
+              <div class="app-score-band">
+                <div class="app-score-card">
+                  <div class="app-score-lbl">TIAN XIWEI</div>
+                  <div class="app-score-val">2,801,911</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">TOP 1</div>
+                  <div class="app-score-val">2,801,911</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">CHÊNH LỆCH</div>
+                  <div class="app-score-val">0</div>
+                </div>
+                <div class="app-score-card">
+                  <div class="app-score-lbl">CẬP NHẬT GẦN N...</div>
+                  <div class="app-score-val" style="font-size: 8px;">09:25:06</div>
+                </div>
+              </div>
+              
+              <div class="app-btn-grid">
+                <div class="app-grid-row-2">
+                  <div class="real-btn btn-real-signup">
+                    <span>Đăng ký mới và Vote (tự động)</span>
+                    <small>Chạy liên tục đến khi bấm Dừng</small>
+                  </div>
+                  <div class="real-btn btn-real-login">
+                    <span>Vote bằng tài khoản cũ</span>
+                    <small>Chỉ chạy account chưa vote hôm nay</small>
+                  </div>
+                </div>
+                <div class="app-grid-row-2">
+                  <div class="real-btn btn-real-alias">
+                    <span>Đăng ký bằng Aliases</span>
+                    <small>Chọn số lượng tài khoản chưa đăng ký để đăng ký</small>
+                  </div>
+                  <div class="real-btn btn-real-manual">
+                    <span>Đăng ký mới và Vote (tự nhập captcha)</span>
+                    <small>Tự nhập captcha trên Bugs</small>
+                  </div>
+                </div>
+                
+                <div class="real-btn btn-real-ads highlight-border">
+                  <span>Xem quảng cáo kiếm tim</span>
+                  <small>Tự động chạy máy ảo xem ads 24/7</small>
+                </div>
+              </div>
+
+              <div class="app-data-row-3">
+                <div class="real-mini-btn">Import Excel</div>
+                <div class="real-mini-btn">Export Excel</div>
+                <div class="real-mini-btn">Tải template</div>
+              </div>
+              <div class="app-data-row-2">
+                <div class="real-mini-btn">Danh sách tài khoản</div>
+                <div class="real-mini-btn">Lịch sử điểm vote</div>
+              </div>
+
+              <div class="real-log-panel">
+                <div class="real-log-header">NHẬT KÝ CHẠY</div>
+                <div class="real-log-body">Chưa có tiến trình đang chạy.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="steps-container">
+          <div class="step-card">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <div class="step-title">Mở điện thoại ảo Android</div>
+              <p class="step-desc">Khởi động phần mềm điện thoại ảo của bạn (NoxPlayer, LDPlayer hoặc Bluestacks). Vào phần cài đặt của điện thoại ảo -> Tùy chọn nhà phát triển -> Đảm bảo đã tích bật tính năng <strong>Gỡ lỗi USB (USB Debugging / ADB)</strong>.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <div class="step-title">Quét tìm thiết bị đang online</div>
+              <p class="step-desc">Bấm chọn nút hồng/tím neon lớn <strong class="highlight-txt">Xem quảng cáo kiếm tim</strong> trên app. Hệ thống sẽ quét toàn bộ cổng kết nối và hiển thị danh sách các điện thoại ảo đang bật trên máy tính của bạn.</p>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <div class="step-title">Chọn máy ảo và Treo máy</div>
+              <p class="step-desc">Lựa chọn điện thoại ảo của bạn trong danh sách, chọn dòng giả lập thích hợp và nhấn <strong>Bắt đầu</strong>. Công cụ tự động mở app Bugs trên máy ảo, nhấp vào vùng xem ads, đợi nhận tim xong sẽ tự động đổi Device ID của máy ảo để tiếp tục xem không giới hạn.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SAFETY IP MECHANISM -->
+    <section id="tinh-nang-an-toan" class="flow-section">
+      <div class="flow-card" style="border-color: rgba(168, 255, 204, 0.2);">
+        <div class="flow-header">
+          <div class="flow-num" style="background: rgba(168, 255, 204, 0.08); color: #a8ffcc; border-color: rgba(168, 255, 204, 0.25)">🛡️</div>
+          <h2 class="flow-title">Hệ Thống Tự Động Ngắt Bảo Vệ Mạng Khỏi Bị Khóa IP</h2>
+        </div>
+        <p class="flow-intro">
+          Hệ thống được trang bị tính năng tự động phát hiện nguy cơ và bảo vệ đường truyền mạng của bạn một cách an toàn nhất.
+        </p>
+        <p style="font-size:13.5px; color:var(--text-muted);">
+          Bugs áp dụng bộ lọc chống spam rất gắt. Khi bạn thực hiện tạo quá nhiều nick liên tục trên cùng một đường truyền mạng, Bugs sẽ khóa IP tạm thời của bạn. 
+          Cơ chế quét thông minh của ứng dụng sẽ liên tục theo dõi log của tất cả luồng chạy. Ngay khi bất kỳ luồng nào bắt gặp dòng chữ lỗi <code>Your IP is temporarily unavailable for membership</code>, hệ thống sẽ <strong>tự động dừng ngay lập tức toàn bộ các luồng cùng lúc</strong>, đóng tất cả các cửa sổ trình duyệt đang chạy để bảo vệ nick khỏi bị dính lỗi liên hoàn, và gửi thông báo khẩn cấp lên màn hình máy tính để nhắc bạn reset modem mạng hoặc đổi IP khác.
+        </p>
+      </div>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section id="su-co-thuong-gap" class="flow-section">
+      <div class="flow-card" style="border-color: var(--danger);">
+        <div class="flow-header">
+          <div class="flow-num" style="background: rgba(255, 179, 179, 0.08); color: var(--danger); border-color: rgba(255, 179, 179, 0.25)">🛠️</div>
+          <h2 class="flow-title">Hướng Dẫn Khắc Phục Sự Cố Thường Gặp (Rất Đơn Giản)</h2>
+        </div>
+        
+        <div class="steps-list" style="margin-top: 15px;">
+          <div class="step-item" style="border-color: rgba(255, 179, 179, 0.1);">
+            <div class="step-content">
+              <div class="step-title" style="color: var(--danger);">Lỗi chặn IP: "Your IP is temporarily unavailable..."</div>
+              <p class="step-desc">
+                <strong>Ý nghĩa:</strong> IP của bạn đã bị Bugs chặn tạm thời do đăng ký quá tần suất.
+                <br><strong>Cách xử lý:</strong> Hãy rút nguồn điện modem Wi-Fi mạng nhà bạn khoảng 30 giây rồi cắm lại để nhận địa chỉ IP mới, hoặc bật một ứng dụng Fake IP/VPN trên máy tính lên trước khi bắt đầu tiếp tục chạy lại tool.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-item" style="border-color: rgba(255, 216, 168, 0.15);">
+            <div class="step-content">
+              <div class="step-title" style="color: var(--warning);">Mục Xem quảng cáo báo không quét thấy Điện thoại ảo Android nào</div>
+              <p class="step-desc">
+                <strong>Ý nghĩa:</strong> Ứng dụng không dò thấy thiết bị ảo nào bật tính năng kết nối USB Debugging.
+                <br><strong>Cách xử lý:</strong> Hãy tắt điện thoại ảo của bạn đi và khởi động lại. Vào Cài đặt điện thoại ảo -> Tùy chọn nhà phát triển -> Tắt tính năng <strong>Gỡ lỗi USB</strong> đi và tích bật lại để làm mới cổng giao tiếp.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Scroll active link highlight in sidebar
+    window.addEventListener('scroll', () => {
+      const sections = document.querySelectorAll('.flow-section');
+      const navItems = document.querySelectorAll('.nav-item');
+      let currentId = '';
+
+      sections.forEach(sec => {
+        const top = sec.offsetTop;
+        if (pageYOffset >= (top - 150)) {
+          currentId = sec.getAttribute('id');
+        }
+      });
+
+      if (currentId) {
+        navItems.forEach(item => {
+          item.classList.remove('active');
+          if (item.getAttribute('data-target') === currentId) {
+            item.classList.add('active');
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>
