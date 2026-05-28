@@ -768,9 +768,8 @@ async function runSchedulerLoop() {
       console.log(`⏳ Đang chờ app load hẳn vào màn hình chính (tránh kẹt)...`);
       await sleep(Math.max(config.appLoadDelay * 1000, 8000)); // Đảm bảo chờ tối thiểu 8s cho trang chủ load mượt mà
 
-      // [Bypass] Tất cả quyền đã được cấp tự động qua pm grant từ trước, bỏ qua để tiết kiệm ~18s
-      // await handlePermissionDialogs();
-      await handleWelcomePopup();
+      // [Bypass] Bỏ qua quét popup trước khi đăng nhập để đi thẳng vào login
+      // await handleWelcomePopup();
 
       console.log(`✍️ Bắt đầu tự động đăng nhập...`);
 
