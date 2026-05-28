@@ -3,42 +3,25 @@ import { simpleParser } from 'mailparser';
 import { chromium } from 'playwright';
 import fs from 'fs/promises';
 import path from 'path';
-import os from 'os';
 
-// Tải cấu hình từ các nguồn khả dụng
-async function loadGmailConfig(accountsPaths) {
-  const possiblePaths = [
-    path.resolve('vote-assist.config.json'), // Cwd
-    path.resolve('../vote-assist.config.json'), // Thư mục cha
-    path.join(os.homedir(), 'Library', 'Application Support', 'tianxiwei-vote-assist', 'vote-assist.config.json'), // Thư mục App Data gốc
-  ];
-
-  // Bổ sung thêm các config nằm trong thư mục instance
-  for (const accPath of accountsPaths) {
-    const instDir = path.dirname(path.dirname(accPath));
-    possiblePaths.push(path.join(instDir, 'vote-assist.config.json'));
-  }
-
-  // Loại bỏ các đường dẫn trùng lặp
-  const uniquePaths = Array.from(new Set(possiblePaths));
-
-  for (const p of uniquePaths) {
-    try {
-      const content = await fs.readFile(p, 'utf8');
-      const parsed = JSON.parse(content);
-      if (parsed.gmail && parsed.gmail.user && parsed.gmail.pass) {
-        return {
-          user: parsed.gmail.user.trim(),
-          pass: parsed.gmail.pass.replace(/\s+/g, '').trim(), // Xóa mọi khoảng trắng trong mật khẩu ứng dụng
-          configPath: p
-        };
-      }
-    } catch {
-      // Bỏ qua nếu lỗi đọc/parse file
+// Tải cấu hình Gmail từ file vote-assist.config.json cục bộ
+async function loadGmailConfig() {
+  const configPath = path.resolve('vote-assist.config.json');
+  try {
+    const content = await fs.readFile(configPath, 'utf8');
+    const parsed = JSON.parse(content);
+    if (parsed.gmail && parsed.gmail.user && parsed.gmail.pass) {
+      return {
+        user: parsed.gmail.user.trim(),
+        pass: parsed.gmail.pass.replace(/\s+/g, '').trim(), // Xóa mọi khoảng trắng trong mật khẩu ứng dụng
+        configPath
+      };
     }
+  } catch {
+    // Bỏ qua nếu lỗi
   }
 
-  // Đọc từ biến môi trường làm dự phòng
+  // Dự phòng từ biến môi trường
   if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
     return {
       user: process.env.GMAIL_USER.trim(),
@@ -62,7 +45,7 @@ function decodeHtmlEntities(str) {
 
 // Hàm xác thực link Bugs bằng Playwright ẩn danh
 async function authenticateBugsLink(authUrl) {
-  console.log(`🤖 [Playwright] Khởi chạy trình duyệt ẩn danh để xác thực link...`);
+  console.log(`🤖 [Playwright] Khởi chạy trình duyệt để xác thực link...`);
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     viewport: { width: 1280, height: 820 }
@@ -99,7 +82,7 @@ async function authenticateBugsLink(authUrl) {
       console.log(`⚠️ [Playwright] Không tìm thấy nút xác thực Confirm đặc thù, kiểm tra trạng thái trang...`);
     }
 
-    await page.waitForTimeout(4000); // Đợi xử lý từ server Bugs
+    await page.waitForTimeout(4000); // Đợi server xử lý
     const currentUrl = page.url();
     const bodyText = await page.locator('body').innerText().catch(() => '');
 
@@ -121,136 +104,16 @@ async function authenticateBugsLink(authUrl) {
   }
 }
 
-// Cập nhật trạng thái tài khoản trong file accounts.json
-async function updateAccountStatus(accountsPaths, targetEmail) {
-  let updatedCount = 0;
-  const emailLower = targetEmail.toLowerCase();
-
-  for (const filePath of accountsPaths) {
-    try {
-      const content = await fs.readFile(filePath, 'utf8');
-      const accounts = JSON.parse(content);
-      if (!Array.isArray(accounts)) continue;
-
-      let fileChanged = false;
-      for (const acc of accounts) {
-        if (acc.email && acc.email.toLowerCase() === emailLower) {
-          if (acc.status !== 'active') {
-            acc.status = 'active';
-            acc.password = acc.password || 'Abcd@1234'; // Đảm bảo luôn có pass mặc định
-            acc.lastError = '';
-            fileChanged = true;
-            updatedCount++;
-            console.log(`💾 Đã cập nhật trạng thái [Active] cho [${acc.email}] trong file: ${filePath}`);
-          } else {
-            console.log(`ℹ️ Tài khoản [${acc.email}] đã ở trạng thái [Active] sẵn.`);
-          }
-        }
-      }
-
-      if (fileChanged) {
-        // Lưu an toàn bằng file ghi tạm
-        const tmpPath = `${filePath}.tmp_${Date.now()}`;
-        await fs.writeFile(tmpPath, JSON.stringify(accounts, null, 2), 'utf8');
-        await fs.rename(tmpPath, filePath);
-      }
-    } catch (error) {
-      console.error(`⚠️ Lỗi khi cập nhật file ${filePath}: ${error.message}`);
-    }
-  }
-
-  return updatedCount;
-}
-
-// Hàm tìm tài khoản khớp trong danh sách để in log chi tiết
-async function findAccountInFiles(accountsPaths, targetEmail) {
-  const emailLower = targetEmail.toLowerCase();
-  for (const filePath of accountsPaths) {
-    try {
-      const content = await fs.readFile(filePath, 'utf8');
-      const accounts = JSON.parse(content);
-      if (!Array.isArray(accounts)) continue;
-      const found = accounts.find(acc => acc.email && acc.email.toLowerCase() === emailLower);
-      if (found) return found;
-    } catch {}
-  }
-  return null;
-}
-
 async function main() {
   console.log(`=======================================================`);
-  console.log(`🚀 BẮT ĐẦU TIẾN TRÌNH XÁC THỰC EMAIL ALIAS TỰ ĐỘNG`);
+  console.log(`🚀 BẮT ĐẦU QUÉT VÀ XÁC THỰC EMAIL ALIAS TỰ ĐỘNG`);
   console.log(`=======================================================`);
 
-  // 1. Quét tìm tất cả các file accounts.json khả dụng
-  const accountsPaths = [];
-  const argPath = process.argv[2];
-
-  if (argPath) {
-    const resolved = path.resolve(argPath);
-    try {
-      const stats = await fs.stat(resolved);
-      if (stats.isDirectory()) {
-        const p1 = path.join(resolved, 'data', 'accounts.json');
-        const p2 = path.join(resolved, 'accounts.json');
-        if (await fs.stat(p1).then(() => true).catch(() => false)) {
-          accountsPaths.push(p1);
-        } else if (await fs.stat(p2).then(() => true).catch(() => false)) {
-          accountsPaths.push(p2);
-        } else {
-          console.warn(`⚠️ Không tìm thấy file accounts.json trong thư mục: ${resolved}`);
-        }
-      } else {
-        accountsPaths.push(resolved);
-      }
-    } catch {
-      // Kiểm tra xem có phải là ID của instance không
-      const defaultInstanceDir = path.join(os.homedir(), 'Library', 'Application Support', 'tianxiwei-vote-assist', 'instances', argPath);
-      const possible = path.join(defaultInstanceDir, 'data', 'accounts.json');
-      if (await fs.stat(possible).then(() => true).catch(() => false)) {
-        accountsPaths.push(possible);
-      } else {
-        console.error(`❌ Lỗi: Không tìm thấy thư mục hoặc file accounts.json tương ứng với: ${argPath}`);
-        process.exit(1);
-      }
-    }
-  } else {
-    // Thử mục data/accounts.json cục bộ trước
-    const localAccounts = path.resolve('data/accounts.json');
-    if (await fs.stat(localAccounts).then(() => true).catch(() => false)) {
-      accountsPaths.push(localAccounts);
-    } else {
-      // Quét toàn bộ instances của Electron
-      const defaultUserData = path.join(os.homedir(), 'Library', 'Application Support', 'tianxiwei-vote-assist');
-      const instancesDir = path.join(defaultUserData, 'instances');
-      try {
-        const dirs = await fs.readdir(instancesDir);
-        for (const dir of dirs) {
-          const p = path.join(instancesDir, dir, 'data', 'accounts.json');
-          if (await fs.stat(p).then(() => true).catch(() => false)) {
-            accountsPaths.push(p);
-          }
-        }
-      } catch {
-        // Bỏ qua nếu thư mục không tồn tại
-      }
-    }
-  }
-
-  if (accountsPaths.length === 0) {
-    console.error(`❌ Lỗi: Không tìm thấy bất kỳ tệp accounts.json nào để xử lý.`);
-    console.error(`💡 Hướng dẫn: Bạn có thể truyền đường dẫn trực tiếp: node scripts/verify-gmail.mjs <đường_dẫn_file_hoặc_thư_mục>`);
-    process.exit(1);
-  }
-
-  console.log(`📂 Đã phát hiện ${accountsPaths.length} tệp dữ liệu accounts.json:`);
-  accountsPaths.forEach(p => console.log(`   - ${p}`));
-
-  // 2. Nạp cấu hình Gmail
-  const gmailConfig = await loadGmailConfig(accountsPaths);
+  // 1. Nạp cấu hình Gmail
+  const gmailConfig = await loadGmailConfig();
   if (!gmailConfig) {
-    console.error(`❌ Lỗi: Chưa cấu hình thông tin Gmail & App Password.`);
-    console.error(`💡 Hướng dẫn: Vui lòng thêm mục "gmail" vào file "vote-assist.config.json" ở thư mục dự án của bạn:`);
+    console.error(`❌ Lỗi: Chưa cấu hình thông tin Gmail & App Password ở file "vote-assist.config.json".`);
+    console.error(`💡 Hướng dẫn: Vui lòng điền thông tin vào file "vote-assist.config.json" ở thư mục dự án của bạn:`);
     console.log(JSON.stringify({
       gmail: {
         user: "email_cua_ban@gmail.com",
@@ -262,7 +125,7 @@ async function main() {
 
   console.log(`📧 Kết nối Gmail: ${gmailConfig.user} (App Password từ: ${gmailConfig.configPath})`);
 
-  // 3. Kết nối IMAP
+  // 2. Kết nối IMAP
   const client = new ImapFlow({
     host: 'imap.gmail.com',
     port: 993,
@@ -310,7 +173,7 @@ async function main() {
               const rawAuthUrl = match[0];
               const authUrl = decodeHtmlEntities(rawAuthUrl);
 
-              // Xác định email nhận thư (để đối khớp)
+              // Xác định email nhận thư (để ghi nhận trong log)
               const toAddress = parsed.to?.value?.[0]?.address || '';
               const deliveredTo = parsed.headers?.get?.('delivered-to') || '';
               let targetEmail = toAddress || deliveredTo || '';
@@ -320,7 +183,6 @@ async function main() {
               }
               targetEmail = String(targetEmail).trim().toLowerCase();
 
-              // Nếu không lấy được To/Delivered-To chuẩn xác, thử trích xuất bằng regex từ email
               if (!targetEmail || !targetEmail.includes('@')) {
                 const matchEmail = htmlContent.match(/[a-zA-Z0-9._%+-]+\.[a-zA-Z0-9._%+-]+@gmail\.com/i);
                 if (matchEmail) targetEmail = matchEmail[0].toLowerCase();
@@ -335,17 +197,7 @@ async function main() {
                 successCount++;
                 // Đánh dấu email đã đọc
                 await client.messageFlagsAdd(msgId, ['\\Seen']);
-                console.log(`👁️ Đã đánh dấu email là ĐÃ ĐỌC (Seen).`);
-
-                if (targetEmail) {
-                  // Cập nhật database
-                  const updated = await updateAccountStatus(accountsPaths, targetEmail);
-                  if (updated > 0) {
-                    console.log(`🎉 Xác thực tự động hoàn tất cho [${targetEmail}]!`);
-                  } else {
-                    console.log(`⚠️ Cảnh báo: Xác thực thành công nhưng không tìm thấy tài khoản [${targetEmail}] trong file accounts.json.`);
-                  }
-                }
+                console.log(`👁️ Đã đánh dấu email của [${targetEmail}] là ĐÃ ĐỌC (Seen).`);
               } else {
                 console.log(`❌ Không thể xác thực tự động email này. Giữ trạng thái Chưa đọc để xử lý sau.`);
               }
