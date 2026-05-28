@@ -160,8 +160,11 @@ async function main() {
           const fromText = parsed.from?.text || '';
           const htmlContent = parsed.html || parsed.textAsHtml || '';
 
-          // Lọc các email liên quan tới Bugs
-          if (/bugs/i.test(fromText) || /bugs/i.test(subject) || /join/i.test(subject) || /인증/i.test(subject)) {
+          // Chỉ quét các thư gửi từ admin@bugs.co.kr
+          const fromAddress = parsed.from?.value?.[0]?.address?.toLowerCase() || '';
+          const isFromBugsAdmin = fromAddress === 'admin@bugs.co.kr' || fromText.toLowerCase().includes('admin@bugs.co.kr');
+
+          if (isFromBugsAdmin) {
             processedCount++;
             console.log(`\n📬 [Thư ${processedCount}] Tiêu đề: "${subject}" | Người gửi: ${fromText}`);
 
