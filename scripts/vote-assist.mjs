@@ -598,7 +598,10 @@ async function runSingleSignupAndVote(browserApi, config, options = {}) {
 
 async function runLoginCommand(config) {
   const accounts = await loadAccounts();
-  const runnable = accounts.filter((account) => !['disabled', 'deactive'].includes(account.status) && !votedToday(account.lastVotedAt));
+  const runnable = accounts.filter((account) => {
+    const status = String(account.status || 'active').trim().toLowerCase();
+    return status === 'active' && !votedToday(account.lastVotedAt);
+  });
   const limit = Number(process.argv[3] ?? config.loginLimit ?? runnable.length);
 
   if (!runnable.length) {
@@ -1183,7 +1186,7 @@ async function fillBugsLogin(page, account) {
   await openBugsLoginForm(page);
   await page.waitForSelector('#user_id, input[name="user_id"]', { timeout: 60_000 });
   await fillBySelectors(page, ['#user_id', 'input[name="user_id"]'], account.email);
-  await fillBySelectors(page, ['#passwd', 'input[name="passwd"]'], account.password ?? PASSWORD);
+  await fillBySelectors(page, ['#passwd', 'input[name="passwd"]'], String(account.password || '').trim() || PASSWORD);
   
   // Polling liên tục chờ Cloudflare Turnstile tích xanh trước khi nhấn nút Đăng nhập
   await waitForTurnstileSuccess(page);
