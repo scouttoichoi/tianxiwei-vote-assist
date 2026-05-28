@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 import fs from 'fs/promises';
 import path from 'path';
 
-const POLL_INTERVAL_MS = 15000; // Quét lại sau mỗi 15 giây
+const POLL_INTERVAL_MS = 5000; // Quét lại sau mỗi 5 giây
 
 // Tải tất cả cấu hình Gmail từ file vote-assist.config.json cục bộ
 async function loadGmailConfigs() {
@@ -218,7 +218,7 @@ async function processGmailAccount(gmailConfig) {
 async function main() {
   console.log(`=======================================================`);
   console.log(`🚀 KHỞI CHẠY THIẾT BỊ LỌC VÀ XÁC THỰC EMAIL TỰ ĐỘNG`);
-  console.log(`⏱️  Chế độ: Chạy liên tục (Quét tuần hoàn mỗi 15 giây)`);
+  console.log(`⏱️  Chế độ: Chạy liên tục (Quét tuần hoàn mỗi 5 giây)`);
   console.log(`=======================================================`);
 
   // 1. Nạp tất cả cấu hình Gmail
