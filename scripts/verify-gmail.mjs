@@ -4,18 +4,32 @@ import { chromium } from 'playwright';
 import fs from 'fs/promises';
 import path from 'path';
 
-// Tải cấu hình Gmail từ file vote-assist.config.json cục bộ
-async function loadGmailConfig() {
+// Tải tất cả cấu hình Gmail từ file vote-assist.config.json cục bộ
+async function loadGmailConfigs() {
   const configPath = path.resolve('vote-assist.config.json');
   try {
     const content = await fs.readFile(configPath, 'utf8');
     const parsed = JSON.parse(content);
+    
+    // Hỗ trợ cấu hình nhiều Gmail dưới dạng Mảng (Array)
+    if (Array.isArray(parsed.gmail)) {
+      const validConfigs = parsed.gmail
+        .filter(item => item && item.user && item.pass)
+        .map(item => ({
+          user: item.user.trim(),
+          pass: item.pass.replace(/\s+/g, '').trim(), // Xóa khoảng trắng mật khẩu
+          configPath
+        }));
+      if (validConfigs.length > 0) return validConfigs;
+    }
+    
+    // Hỗ trợ cấu hình đơn lẻ
     if (parsed.gmail && parsed.gmail.user && parsed.gmail.pass) {
-      return {
+      return [{
         user: parsed.gmail.user.trim(),
-        pass: parsed.gmail.pass.replace(/\s+/g, '').trim(), // Xóa mọi khoảng trắng trong mật khẩu ứng dụng
+        pass: parsed.gmail.pass.replace(/\s+/g, '').trim(),
         configPath
-      };
+      }];
     }
   } catch {
     // Bỏ qua nếu lỗi
@@ -23,14 +37,14 @@ async function loadGmailConfig() {
 
   // Dự phòng từ biến môi trường
   if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-    return {
+    return [{
       user: process.env.GMAIL_USER.trim(),
       pass: process.env.GMAIL_PASS.replace(/\s+/g, '').trim(),
       configPath: 'Environment Variables'
-    };
+    }];
   }
 
-  return null;
+  return [];
 }
 
 // Giải mã HTML Entities thông dụng
@@ -104,28 +118,12 @@ async function authenticateBugsLink(authUrl) {
   }
 }
 
-async function main() {
-  console.log(`=======================================================`);
-  console.log(`🚀 BẮT ĐẦU QUÉT VÀ XÁC THỰC EMAIL ALIAS TỰ ĐỘNG`);
-  console.log(`=======================================================`);
+// Xử lý quét và xác thực cho 1 tài khoản Gmail cụ thể
+async function processGmailAccount(gmailConfig) {
+  console.log(`\n-------------------------------------------------------`);
+  console.log(`📧 KẾT NỐI HÒM THƯ: ${gmailConfig.user}`);
+  console.log(`-------------------------------------------------------`);
 
-  // 1. Nạp cấu hình Gmail
-  const gmailConfig = await loadGmailConfig();
-  if (!gmailConfig) {
-    console.error(`❌ Lỗi: Chưa cấu hình thông tin Gmail & App Password ở file "vote-assist.config.json".`);
-    console.error(`💡 Hướng dẫn: Vui lòng điền thông tin vào file "vote-assist.config.json" ở thư mục dự án của bạn:`);
-    console.log(JSON.stringify({
-      gmail: {
-        user: "email_cua_ban@gmail.com",
-        pass: "16_ky_tu_mat_khau_ung_dung"
-      }
-    }, null, 2));
-    process.exit(1);
-  }
-
-  console.log(`📧 Kết nối Gmail: ${gmailConfig.user} (App Password từ: ${gmailConfig.configPath})`);
-
-  // 2. Kết nối IMAP
   const client = new ImapFlow({
     host: 'imap.gmail.com',
     port: 993,
@@ -138,15 +136,15 @@ async function main() {
   });
 
   try {
-    console.log(`🔌 Đang kết nối tới Gmail qua giao thức IMAP bảo mật...`);
+    console.log(`🔌 Đang kết nối tới IMAP Gmail...`);
     await client.connect();
-    console.log(`✅ Kết nối Gmail thành công.`);
+    console.log(`✅ Kết nối thành công.`);
 
     let lock = await client.getMailboxLock('INBOX');
     try {
-      console.log(`🔍 Đang quét các email CHƯA ĐỌC (UNSEEN) từ Bugs trong hộp thư đến...`);
+      console.log(`🔍 Đang quét email CHƯA ĐỌC (UNSEEN) từ Bugs...`);
       const messages = await client.search({ unseen: true });
-      console.log(`📨 Tìm thấy ${messages.length} email chưa đọc tổng cộng.`);
+      console.log(`📨 Tìm thấy ${messages.length} email chưa đọc từ hòm thư này.`);
 
       let processedCount = 0;
       let successCount = 0;
@@ -166,7 +164,7 @@ async function main() {
 
           if (isFromBugsAdmin) {
             processedCount++;
-            console.log(`\n📬 [Thư ${processedCount}] Tiêu đề: "${subject}" | Người gửi: ${fromText}`);
+            console.log(`\n📬 [Thư ${processedCount}] Tiêu đề: "${subject}"`);
 
             // Tìm link xác thực trong nội dung HTML
             const authUrlPattern = /https:\/\/secure\.bugs\.co\.kr\/member\/join\/authCode\/check[^"'<\s]+/i;
@@ -213,10 +211,8 @@ async function main() {
         }
       }
 
-      console.log(`\n=======================================================`);
-      console.log(`📊 KẾT QUẢ: Đã xử lý ${processedCount} email liên quan đến Bugs.`);
-      console.log(`🏆 Xác thực thành công: ${successCount} tài khoản.`);
-      console.log(`=======================================================`);
+      console.log(`✨ Hoàn tất quét hòm thư: ${gmailConfig.user}`);
+      console.log(`📊 Đã xử lý: ${processedCount} thư của Bugs | Kích hoạt thành công: ${successCount} tài khoản.`);
 
     } finally {
       lock.release();
@@ -224,8 +220,33 @@ async function main() {
 
     await client.logout();
   } catch (error) {
-    console.error(`❌ Lỗi hệ thống: ${error.message}`);
+    console.error(`❌ Lỗi khi kết nối hòm thư ${gmailConfig.user}: ${error.message}`);
   }
+}
+
+async function main() {
+  console.log(`=======================================================`);
+  console.log(`🚀 BẮT ĐẦU QUÉT VÀ XÁC THỰC EMAIL ALIAS TỰ ĐỘNG`);
+  console.log(`=======================================================`);
+
+  // 1. Nạp tất cả cấu hình Gmail
+  const gmailConfigs = await loadGmailConfigs();
+  if (gmailConfigs.length === 0) {
+    console.error(`❌ Lỗi: Chưa cấu hình thông tin Gmail & App Password ở file "vote-assist.config.json".`);
+    console.error(`💡 Hướng dẫn: Vui lòng điền thông tin Gmail vào file "vote-assist.config.json" ở gốc dự án.`);
+    process.exit(1);
+  }
+
+  console.log(`📂 Đã nạp thành công cấu hình cho ${gmailConfigs.length} hòm thư Gmail.`);
+
+  // 2. Chạy quét tuần tự từng hòm thư
+  for (const config of gmailConfigs) {
+    await processGmailAccount(config);
+  }
+
+  console.log(`\n=======================================================`);
+  console.log(`🎉 TOÀN BỘ TIẾN TRÌNH XÁC THỰC HOÀN TẤT!`);
+  console.log(`=======================================================`);
 }
 
 main().catch(console.error);
