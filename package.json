@@ -9,6 +9,7 @@
     "vote-assist": "node scripts/vote-assist.mjs signup",
     "vote-assist:signup": "node scripts/vote-assist.mjs signup",
     "vote-assist:login": "node scripts/vote-assist.mjs login",
+    "vote-assist:verify-gmail": "node scripts/verify-gmail.mjs",
     "app": "electron .",
     "dist:mac": "electron-builder --mac dmg",
     "dist:win": "electron-builder --win nsis"
@@ -59,6 +60,8 @@
   },
   "dependencies": {
     "cloakbrowser": "latest",
+    "imapflow": "^1.3.3",
+    "mailparser": "^3.9.8",
     "playwright": "latest",
     "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
