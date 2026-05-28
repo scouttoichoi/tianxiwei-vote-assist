@@ -52,6 +52,11 @@ const importChoiceDialog = document.getElementById('importChoiceDialog');
 const closeImportChoiceDialog = document.getElementById('closeImportChoiceDialog');
 const confirmImportChoiceDialog = document.getElementById('confirmImportChoiceDialog');
 
+// Export Choice Dialog
+const exportChoiceDialog = document.getElementById('exportChoiceDialog');
+const closeExportChoiceDialog = document.getElementById('closeExportChoiceDialog');
+const confirmExportChoiceDialog = document.getElementById('confirmExportChoiceDialog');
+
 // Download Template Dialog
 const templateChoiceDialog = document.getElementById('templateChoiceDialog');
 const closeTemplateChoiceDialog = document.getElementById('closeTemplateChoiceDialog');
@@ -783,7 +788,7 @@ async function showAccounts() {
   const groupedAccounts = {
     active: accounts.filter((account) => {
       const s = (account.status || 'active').toLowerCase();
-      return s !== 'deactive' && s !== 'not-register';
+      return s === 'active';
     }),
     notRegister: accounts.filter((account) => (account.status || '').toLowerCase() === 'not-register'),
     deactive: accounts.filter((account) => (account.status || '').toLowerCase() === 'deactive')
@@ -2192,9 +2197,14 @@ importAccountsButton?.addEventListener('click', () => {
   importChoiceDialog.showModal();
 });
 
-exportAccountsButton?.addEventListener('click', async () => {
+closeExportChoiceDialog?.addEventListener('click', () => exportChoiceDialog.close());
+exportChoiceDialog?.addEventListener('cancel', () => exportChoiceDialog.close());
+
+confirmExportChoiceDialog?.addEventListener('click', async () => {
+  exportChoiceDialog.close();
   if (!selectedInstanceId) return;
-  const result = await window.txw.exportInstanceAccounts(selectedInstanceId);
+  const exportType = document.querySelector('input[name="exportType"]:checked')?.value || 'created';
+  const result = await window.txw.exportInstanceAccounts(selectedInstanceId, exportType);
 
   if (!result || result.cancelled) {
     openModal(t('exportDoneTitle'), `<p>${t('exportCancelled')}</p>`);
@@ -2206,6 +2216,11 @@ exportAccountsButton?.addEventListener('click', async () => {
     .replace('{path}', result.filePath);
 
   openModal(t('exportDoneTitle'), `<p>${message}</p>`);
+});
+
+exportAccountsButton?.addEventListener('click', () => {
+  if (!selectedInstanceId) return;
+  exportChoiceDialog.showModal();
 });
 
 // Global instances management

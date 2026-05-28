@@ -871,7 +871,8 @@ async function saveAccounts(accounts) {
 function getNextEligibleAccount(accounts) {
   const now = Date.now();
   const eligible = accounts.filter(acc => {
-    if (['disabled', 'deactive'].includes(acc.status)) return false;
+    const status = String(acc.status || 'active').trim().toLowerCase();
+    if (status !== 'active') return false;
 
     if (!acc.lastAdWatchAt) return true;
     const elapsed = now - new Date(acc.lastAdWatchAt).getTime();

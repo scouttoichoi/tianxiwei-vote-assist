@@ -21,6 +21,7 @@ const rootDir = app.getAppPath();
 const runtimeDir = app.getPath('userData');
 const globalSettingsPath = path.join(runtimeDir, 'global-settings.json');
 const fsSync = require('node:fs');
+const VALID_ACCOUNT_STATUSES = new Set(['active', 'deactive', 'not-register']);
 
 // Tự động phát hiện và cấu hình đường dẫn Chromium cục bộ (nếu có)
 function detectLocalBinary() {
@@ -1027,6 +1028,12 @@ function accountToExportRow(account) {
   };
 }
 
+function aliasToExportRow(account) {
+  return {
+    email: account.email || ''
+  };
+}
+
 // --- IPC HANDLERS ---
 
 //
@@ -1058,7 +1065,10 @@ ipcMain.handle('instances:list', async () => {
     const accounts = await readAccounts(inst.id);
     const summary = await readScoreSummary(inst.id);
 
-    const activeAccounts = accounts.filter(acc => !['disabled', 'deactive', 'not-register'].includes(acc.status));
+    const activeAccounts = accounts.filter((acc) => {
+      const status = String(acc?.status || 'active').trim().toLowerCase();
+      return status === 'active';
+    });
     const votedTodayCount = activeAccounts.filter(acc => hasVotedTodayKorea(acc.lastVotedAt)).length;
 
     return {
@@ -1350,7 +1360,9 @@ ipcMain.handle('instances:import-accounts', async (_event, instanceId, importTyp
 
   const importedAt = new Date();
   const accounts = await readAccounts(instanceId);
-  const byEmail = new Map(accounts.map((account) => [String(account.email || '').toLowerCase(), account]));
+  const byEmail = new Map(
+    accounts.map((account) => [String(account.email || '').trim().toLowerCase(), account])
+  );
 
   let created = 0;
   let updated = 0;
@@ -1368,7 +1380,7 @@ ipcMain.handle('instances:import-accounts', async (_event, instanceId, importTyp
       continue;
     }
 
-    const key = nextAccount.email.toLowerCase();
+    const key = String(nextAccount.email || '').trim().toLowerCase();
     if (seenEmails.has(key)) {
       duplicated += 1;
       skipped += 1;
@@ -1412,7 +1424,7 @@ ipcMain.handle('instances:import-accounts', async (_event, instanceId, importTyp
   };
 });
 
-ipcMain.handle('instances:export-accounts', async (_event, instanceId) => {
+ipcMain.handle('instances:export-accounts', async (_event, instanceId, exportType = 'created') => {
   const settings = await loadGlobalSettings();
   const inst = settings.instances.find((item) => item.id === instanceId);
   const safeName = String(inst?.name || instanceId || 'instance')
@@ -1420,10 +1432,11 @@ ipcMain.handle('instances:export-accounts', async (_event, instanceId) => {
     .replace(/[\\/:*?"<>|]+/g, '-')
     .replace(/\s+/g, '-')
     .slice(0, 60);
+  const isAliasExport = exportType === 'uncreated';
 
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Export accounts to Excel',
-    defaultPath: `${safeName || 'instance'}-accounts.xlsx`,
+    defaultPath: `${safeName || 'instance'}-${isAliasExport ? 'aliases' : 'accounts'}.xlsx`,
     filters: [
       { name: 'Excel Files', extensions: ['xlsx'] }
     ]
@@ -1434,17 +1447,25 @@ ipcMain.handle('instances:export-accounts', async (_event, instanceId) => {
   }
 
   const accounts = await readAccounts(instanceId);
-  const rows = accounts.map(accountToExportRow);
+  const rows = isAliasExport
+    ? accounts
+      .filter((account) => String(account?.status || '').trim().toLowerCase() === 'not-register')
+      .map(aliasToExportRow)
+    : accounts
+      .filter((account) => String(account?.status || 'active').trim().toLowerCase() === 'active')
+      .map(accountToExportRow);
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.json_to_sheet(rows, {
-    header: ['user', 'pass', 'voted_today']
+    header: isAliasExport ? ['email'] : ['user', 'pass', 'voted_today']
   });
 
-  sheet['!cols'] = [
-    { wch: 32 },
-    { wch: 24 },
-    { wch: 14 }
-  ];
+  sheet['!cols'] = isAliasExport
+    ? [{ wch: 40 }]
+    : [
+      { wch: 32 },
+      { wch: 24 },
+      { wch: 14 }
+    ];
 
   XLSX.utils.book_append_sheet(workbook, sheet, 'accounts');
   XLSX.writeFile(workbook, result.filePath);
@@ -1470,7 +1491,7 @@ ipcMain.handle('instances:mark-voted', async (_event, instanceId, email) => {
   }
 
   account.lastVotedAt = new Date().toISOString();
-  account.status = account.status || 'active';
+  account.status = 'active';
   account.lastError = '';
 
   await saveAccounts(instanceId, accounts);
@@ -1484,8 +1505,12 @@ ipcMain.handle('instances:mark-voted', async (_event, instanceId, email) => {
 
 ipcMain.handle('instances:toggle-account-status', async (_event, instanceId, email, newStatus) => {
   const targetEmail = String(email || '').trim().toLowerCase();
+  const normalizedStatus = String(newStatus || '').trim().toLowerCase();
   if (!targetEmail) {
     throw new Error('Missing account email');
+  }
+  if (!VALID_ACCOUNT_STATUSES.has(normalizedStatus)) {
+    throw new Error(`Invalid account status: ${newStatus}`);
   }
 
   const accounts = await readAccounts(instanceId);
@@ -1495,8 +1520,8 @@ ipcMain.handle('instances:toggle-account-status', async (_event, instanceId, ema
     throw new Error('Account not found');
   }
 
-  account.status = newStatus;
-  if (newStatus === 'active') {
+  account.status = normalizedStatus;
+  if (normalizedStatus === 'active') {
     account.lastError = ''; // Clear error on activation
     delete account.lastAdWatchAt; // Xóa mốc xem ad để reset cooldown lập tức
   }
