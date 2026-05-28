@@ -3,10 +3,14 @@ import path from 'path';
 import * as XLSX from 'xlsx';
 
 const baseEmails = [
-  'hah821051@gmail.com',
-  'lix98480@gmail.com',
-  'heem92897@gmail.com',
-  'luuanhduc566@gmail.com'
+  'Ptbhang0112@gmail.com',
+  'bhang0112.miu@mail.com',
+  'Tra.olong101@gmail.com',
+  'Vuongngoclinh.1100@gmail.com',
+  'phungthibichhang.10b5@gmail.com',
+  'Nguyen10dat13@gmail.com',
+  'Thuyanh.23081992@gmail.com',
+  'bichdung17.10@gmail.com'
 ];
 
 const outputDir = '/Users/danielngo/Desktop/tianxiwei-vote-assist/exports';
@@ -16,10 +20,9 @@ if (!fs.existsSync(outputDir)) {
 
 function generateDotAliases(email) {
   const [username, domain] = email.split('@');
-  if (domain.toLowerCase() !== 'gmail.com') {
-    return [email];
-  }
-  const len = username.length;
+  // Strip existing dots to compute all possible permutations.
+  const cleanUsername = username.replace(/\./g, '');
+  const len = cleanUsername.length;
   if (len <= 1) {
     return [email];
   }
@@ -29,7 +32,7 @@ function generateDotAliases(email) {
   for (let i = 0; i < numCombinations; i++) {
     let current = '';
     for (let j = 0; j < len; j++) {
-      current += username[j];
+      current += cleanUsername[j];
       if (j < len - 1 && (i & (1 << j))) {
         current += '.';
       }
@@ -61,7 +64,8 @@ for (const baseEmail of baseEmails) {
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Email Aliases');
   
   const username = baseEmail.split('@')[0];
-  const filePath = path.join(outputDir, `${username}_aliases.xlsx`);
+  const filePrefix = username.replace(/\./g, '_');
+  const filePath = path.join(outputDir, `${filePrefix}_aliases.xlsx`);
   
   XLSX.writeFile(workbook, filePath);
   console.log(`Saved to ${filePath}`);
