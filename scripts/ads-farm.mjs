@@ -10,24 +10,26 @@ import { promisify } from 'node:util';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Ghi đè console.log để xuất log tức thời trong thời gian thực (Bypass bộ đệm stream của Node)
+// Ghi đè console.log để xuất log tức thời trong thời gian thực (Bypass bộ đệm stream của Node) kèm mốc thời gian
 const originalLog = console.log;
 console.log = function (...args) {
-  const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  const timeStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+  const msg = `[${timeStr}] ` + args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
   try {
     fs.writeSync(1, msg + '\n');
   } catch {
-    originalLog(...args);
+    originalLog(`[${timeStr}]`, ...args);
   }
 };
 
 const originalError = console.error;
 console.error = function (...args) {
-  const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  const timeStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+  const msg = `[${timeStr}] ` + args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
   try {
     fs.writeSync(2, msg + '\n');
   } catch {
-    originalError(...args);
+    originalError(`[${timeStr}]`, ...args);
   }
 };
 
@@ -223,13 +225,53 @@ async function handlePermissionDialogs() {
   console.log(`ℹ️ Đã kiểm tra xong popup quyền Android.`);
 }
 //
+const STATE_PATH = path.resolve('data/ads-farm-state.json');
+
+async function loadFarmState() {
+  try {
+    const content = await fsPromises.readFile(STATE_PATH, 'utf8');
+    return JSON.parse(content);
+  } catch {
+    return {};
+  }
+}
+
+async function saveFarmState(state) {
+  try {
+    const dir = path.dirname(STATE_PATH);
+    await fsPromises.mkdir(dir, { recursive: true });
+    await fsPromises.writeFile(STATE_PATH, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  } catch (err) {
+    console.error('❌ [State] Không thể lưu file ads-farm-state.json:', err.message);
+  }
+}
+
 // Phát hiện và đóng popup quảng cáo trang chủ (Who is your bias) nếu xuất hiện
 async function handleWelcomePopup() {
   console.log(`🔍 [Popup Checker] Đang quét tìm popup quảng cáo trang chủ...`);
 
-  // Quét tối đa 6 lần (khoảng 9-10 giây) để chờ popup xuất hiện bất đồng bộ (tránh bất đồng bộ mạng chậm)
-  for (let attempt = 1; attempt <= 6; attempt++) {
-    console.log(`🔍 [Popup Checker] Lần quét thứ ${attempt}/6...`);
+  const state = await loadFarmState();
+  const now = Date.now();
+  let maxAttempts = 6;
+  let isQuickCheck = false;
+
+  // Kiểm tra xem có lần đóng popup hoặc quét đầy đủ nào trong vòng 18 giờ qua không
+  const checkInterval = 18 * 60 * 60 * 1000; // 18 giờ
+  const lastClosed = state.lastWelcomePopupClosedAt ? new Date(state.lastWelcomePopupClosedAt).getTime() : 0;
+  const lastFullChecked = state.lastWelcomePopupFullCheckedAt ? new Date(state.lastWelcomePopupFullCheckedAt).getTime() : 0;
+
+  if ((now - lastClosed < checkInterval) || (now - lastFullChecked < checkInterval)) {
+    isQuickCheck = true;
+    maxAttempts = 1; // Chỉ cần quét 1 lần duy nhất để tiết kiệm thời gian (khoảng 2 giây)
+    console.log(`ℹ️ [Popup Checker] Đã đóng hoặc quét đầy đủ trong 18 giờ qua. Chuyển sang chế độ Quét nhanh (tối đa 1 lần)...`);
+  }
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (maxAttempts > 1) {
+      console.log(`🔍 [Popup Checker] Lần quét thứ ${attempt}/${maxAttempts}...`);
+    } else {
+      console.log(`🔍 [Popup Checker] Quét nhanh 1 lần duy nhất...`);
+    }
     const popup = await findClickableBounds(['1일 동안 보지 않기', 'layerOpenCheck']);
     if (popup) {
       console.log(`👉 Phát hiện popup trang chủ Bugs. Bấm "1일 동안 보지 않기" tại (${popup.centerX}, ${popup.centerY})...`);
@@ -243,12 +285,27 @@ async function handleWelcomePopup() {
         await adbExec(`shell input tap ${closeBtn.centerX} ${closeBtn.centerY}`);
         await sleep(2000);
       }
+      
+      // Lưu lại trạng thái đóng popup thành công
+      state.lastWelcomePopupClosedAt = new Date().toISOString();
+      state.lastWelcomePopupFullCheckedAt = new Date().toISOString();
+      await saveFarmState(state);
       return true;
     }
-    await sleep(1500); // Chờ 1.5 giây trước khi quét lại
+    
+    if (attempt < maxAttempts) {
+      await sleep(1500); // Chờ 1.5 giây trước khi quét lại
+    }
   }
 
-  console.log(`ℹ️ Không phát hiện popup trang chủ Bugs sau 6 lần quét.`);
+  console.log(`ℹ️ Không phát hiện popup trang chủ Bugs sau ${maxAttempts} lần quét.`);
+
+  // Nếu là lần quét đầy đủ (6 lần) và không thấy, lưu lại trạng thái để lần sau bỏ qua
+  if (!isQuickCheck) {
+    state.lastWelcomePopupFullCheckedAt = new Date().toISOString();
+    await saveFarmState(state);
+  }
+  
   return false;
 }
 
@@ -703,14 +760,16 @@ async function runSchedulerLoop() {
       await sleep(1000);
 
       // 3. Xoay IP Cloudflare WARP (Bật VPN sau khi cấu hình hệ thống đã ổn định)
-      await rotateWarpIP();
+      // await rotateWarpIP();
+      console.log(`ℹ️ [WARP Skip] Đã bỏ qua xoay IP Cloudflare WARP theo yêu cầu.`);
 
       console.log(`🎬 Khởi chạy ứng dụng vote...`);
       await adbExec(`shell am start -n com.neowiz.android.bugs/.MainActivity`);
       console.log(`⏳ Đang chờ app load hẳn vào màn hình chính (tránh kẹt)...`);
       await sleep(Math.max(config.appLoadDelay * 1000, 8000)); // Đảm bảo chờ tối thiểu 8s cho trang chủ load mượt mà
 
-      await handlePermissionDialogs();
+      // [Bypass] Tất cả quyền đã được cấp tự động qua pm grant từ trước, bỏ qua để tiết kiệm ~18s
+      // await handlePermissionDialogs();
       await handleWelcomePopup();
 
       console.log(`✍️ Bắt đầu tự động đăng nhập...`);
@@ -792,7 +851,8 @@ async function runSchedulerLoop() {
       await sleep(Math.max(config.appLoadDelay * 1000, 8000));
 
       // Đóng popup quảng cáo nếu xuất hiện
-      await handlePermissionDialogs();
+      // [Bypass] Đã cấp quyền tự động qua pm grant, bỏ qua để tiết kiệm ~18s
+      // await handlePermissionDialogs();
       await handleWelcomePopup();
 
       console.log(`📺 Đang điều hướng lại đến Trạm sạc tim...`);
