@@ -142,9 +142,9 @@ async function processGmailAccount(gmailConfig) {
 
     let lock = await client.getMailboxLock('INBOX');
     try {
-      console.log(`🔍 Đang quét email CHƯA ĐỌC (UNSEEN) từ Bugs...`);
-      const messages = await client.search({ unseen: true });
-      console.log(`📨 Tìm thấy ${messages.length} email chưa đọc từ hòm thư này.`);
+      console.log(`🔍 Đang quét email CHƯA ĐỌC gửi từ admin@bugs.co.kr...`);
+      const messages = await client.search({ unseen: true, from: 'admin@bugs.co.kr' });
+      console.log(`📨 Tìm thấy ${messages.length} email chưa đọc gửi từ admin@bugs.co.kr.`);
 
       let processedCount = 0;
       let successCount = 0;
