@@ -59,16 +59,57 @@ function decodeHtmlEntities(str) {
     .replace(/&#39;/g, "'");
 }
 
+// Hàm mở trình duyệt tránh Cloudflare bằng cloakbrowser hoặc headed playwright
+async function launchSmartBrowser() {
+  try {
+    const cloak = await import('cloakbrowser').then(m => m.default || m);
+    
+    // Tạo thư mục tạm để lưu profile sạch cho mỗi lần chạy
+    const tempProfileDir = path.join(os.tmpdir(), `bugs-auth-profile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+    
+    let browserInstance;
+    if (typeof cloak.launchPersistentContext === 'function') {
+      browserInstance = await cloak.launchPersistentContext({
+        headless: false, // Để false để vượt qua Cloudflare tự động
+        humanize: true,
+        userDataDir: tempProfileDir,
+        viewport: { width: 1280, height: 820 },
+        deviceScaleFactor: 1,
+        launchOptions: {
+          args: ['--window-size=1280,820']
+        }
+      });
+    } else {
+      browserInstance = await cloak.launch({
+        headless: false,
+        humanize: true,
+        args: ['--window-size=1280,820']
+      });
+    }
+    return { browser: browserInstance, isCloak: true, tempProfileDir };
+  } catch (error) {
+    console.log(`   ⚠️ [Browser] Dùng Playwright Headed làm dự phòng: ${error.message}`);
+    const browser = await chromium.launch({
+      headless: false, // BẮT BUỘC để false để giải Cloudflare tự động
+      args: ['--window-size=1280,820']
+    });
+    return { browser, isCloak: false };
+  }
+}
+
 // Hàm xác thực link Bugs bằng Playwright ẩn danh
 async function authenticateBugsLink(authUrl) {
-  console.log(`   🤖 [Playwright] Khởi chạy trình duyệt ngầm để click xác thực...`);
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 820 }
-  });
-  const page = await context.newPage();
-
+  console.log(`   🤖 [SmartBrowser] Khởi chạy trình duyệt chống chặn để click xác thực...`);
+  
+  let browserState = null;
   try {
+    browserState = await launchSmartBrowser();
+    const context = browserState.isCloak ? browserState.browser : await browserState.browser.newContext({
+      viewport: { width: 1280, height: 820 }
+    });
+    const page = await context.newPage();
+
+    console.log(`   🔗 [Browser] Điều hướng tới: ${authUrl}`);
     await page.goto(authUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const confirmSelectors = [
@@ -84,7 +125,7 @@ async function authenticateBugsLink(authUrl) {
     for (const selector of confirmSelectors) {
       const locator = page.locator(selector).first();
       if (await locator.count().catch(() => 0) > 0) {
-        console.log(`   👉 [Playwright] Nhấp nút xác thực: "${selector}"`);
+        console.log(`   👉 [Browser] Nhấp nút xác thực: "${selector}"`);
         await locator.scrollIntoViewIfNeeded().catch(() => {});
         await locator.click({ timeout: 5000, force: true });
         await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
@@ -101,17 +142,22 @@ async function authenticateBugsLink(authUrl) {
                       /authenticated|complete|welcome|success|인증|확인|완료/i.test(bodyText);
 
     if (isSuccess) {
-      console.log(`   ✅ [Playwright] Kích hoạt thành công trên trang chủ Bugs!`);
+      console.log(`   ✅ [Browser] Kích hoạt thành công trên trang chủ Bugs!`);
       return true;
     } else {
-      console.log(`   ❌ [Playwright] Thất bại. URL: ${currentUrl}`);
+      console.log(`   ❌ [Browser] Thất bại. URL: ${currentUrl}`);
       return false;
     }
   } catch (error) {
-    console.error(`   ❌ [Playwright] Lỗi xác thực: ${error.message}`);
+    console.error(`   ❌ [Browser] Lỗi xác thực: ${error.message}`);
     return false;
   } finally {
-    await browser.close().catch(() => {});
+    if (browserState && browserState.browser) {
+      await browserState.browser.close().catch(() => {});
+    }
+    if (browserState && browserState.tempProfileDir) {
+      await fs.rm(browserState.tempProfileDir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 }
 
