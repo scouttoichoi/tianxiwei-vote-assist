@@ -4,6 +4,8 @@ import { chromium } from 'playwright';
 import fs from 'fs/promises';
 import path from 'path';
 
+const POLL_INTERVAL_MS = 15000; // Quét lại sau mỗi 15 giây
+
 // Tải tất cả cấu hình Gmail từ file vote-assist.config.json cục bộ
 async function loadGmailConfigs() {
   const configPath = path.resolve('vote-assist.config.json');
@@ -59,7 +61,7 @@ function decodeHtmlEntities(str) {
 
 // Hàm xác thực link Bugs bằng Playwright ẩn danh
 async function authenticateBugsLink(authUrl) {
-  console.log(`🤖 [Playwright] Khởi chạy trình duyệt để xác thực link...`);
+  console.log(`   🤖 [Playwright] Khởi chạy trình duyệt ngầm để click xác thực...`);
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     viewport: { width: 1280, height: 820 }
@@ -67,7 +69,6 @@ async function authenticateBugsLink(authUrl) {
   const page = await context.newPage();
 
   try {
-    console.log(`🔗 [Playwright] Điều hướng tới: ${authUrl}`);
     await page.goto(authUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const confirmSelectors = [
@@ -83,17 +84,13 @@ async function authenticateBugsLink(authUrl) {
     for (const selector of confirmSelectors) {
       const locator = page.locator(selector).first();
       if (await locator.count().catch(() => 0) > 0) {
-        console.log(`👉 [Playwright] Phát hiện và nhấp nút xác thực: "${selector}"`);
+        console.log(`   👉 [Playwright] Nhấp nút xác thực: "${selector}"`);
         await locator.scrollIntoViewIfNeeded().catch(() => {});
         await locator.click({ timeout: 5000, force: true });
         await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
         clicked = true;
         break;
       }
-    }
-
-    if (!clicked) {
-      console.log(`⚠️ [Playwright] Không tìm thấy nút xác thực Confirm đặc thù, kiểm tra trạng thái trang...`);
     }
 
     await page.waitForTimeout(4000); // Đợi server xử lý
@@ -104,14 +101,14 @@ async function authenticateBugsLink(authUrl) {
                       /authenticated|complete|welcome|success|인증|확인|완료/i.test(bodyText);
 
     if (isSuccess) {
-      console.log(`✅ [Playwright] Xác thực thành công trên Bugs!`);
+      console.log(`   ✅ [Playwright] Kích hoạt thành công trên trang chủ Bugs!`);
       return true;
     } else {
-      console.log(`❌ [Playwright] Xác thực thất bại hoặc trang báo lỗi. URL hiện tại: ${currentUrl}`);
+      console.log(`   ❌ [Playwright] Thất bại. URL: ${currentUrl}`);
       return false;
     }
   } catch (error) {
-    console.error(`❌ [Playwright] Lỗi trong quá trình xác thực: ${error.message}`);
+    console.error(`   ❌ [Playwright] Lỗi xác thực: ${error.message}`);
     return false;
   } finally {
     await browser.close().catch(() => {});
@@ -120,10 +117,6 @@ async function authenticateBugsLink(authUrl) {
 
 // Xử lý quét và xác thực cho 1 tài khoản Gmail cụ thể
 async function processGmailAccount(gmailConfig) {
-  console.log(`\n-------------------------------------------------------`);
-  console.log(`📧 KẾT NỐI HÒM THƯ: ${gmailConfig.user}`);
-  console.log(`-------------------------------------------------------`);
-
   const client = new ImapFlow({
     host: 'imap.gmail.com',
     port: 993,
@@ -135,16 +128,22 @@ async function processGmailAccount(gmailConfig) {
     logger: false
   });
 
+  const timeStr = new Date().toLocaleTimeString();
+
   try {
-    console.log(`🔌 Đang kết nối tới IMAP Gmail...`);
     await client.connect();
-    console.log(`✅ Kết nối thành công.`);
 
     let lock = await client.getMailboxLock('INBOX');
     try {
-      console.log(`🔍 Đang quét email CHƯA ĐỌC gửi từ admin@bugs.co.kr...`);
       const messages = await client.search({ unseen: true, from: 'admin@bugs.co.kr' });
-      console.log(`📨 Tìm thấy ${messages.length} email chưa đọc gửi từ admin@bugs.co.kr.`);
+
+      // Log siêu gọn nếu không có thư mới để đỡ rác màn hình Terminal
+      if (messages.length === 0) {
+        console.log(`[${timeStr}] 📬 [${gmailConfig.user}] Trạng thái: Yên lặng (0 thư mới từ admin@bugs.co.kr)`);
+        return;
+      }
+
+      console.log(`\n[${timeStr}] 🎉 [${gmailConfig.user}] PHÁT HIỆN ${messages.length} THƯ MỚI CHƯA ĐỌC! Đang xử lý...`);
 
       let processedCount = 0;
       let successCount = 0;
@@ -155,64 +154,56 @@ async function processGmailAccount(gmailConfig) {
           const parsed = await simpleParser(message.source);
 
           const subject = parsed.subject || '';
-          const fromText = parsed.from?.text || '';
           const htmlContent = parsed.html || parsed.textAsHtml || '';
 
-          // Chỉ quét các thư gửi từ admin@bugs.co.kr
-          const fromAddress = parsed.from?.value?.[0]?.address?.toLowerCase() || '';
-          const isFromBugsAdmin = fromAddress === 'admin@bugs.co.kr' || fromText.toLowerCase().includes('admin@bugs.co.kr');
+          processedCount++;
+          console.log(` 📬 [Thư ${processedCount}] Tiêu đề: "${subject}"`);
 
-          if (isFromBugsAdmin) {
-            processedCount++;
-            console.log(`\n📬 [Thư ${processedCount}] Tiêu đề: "${subject}"`);
+          // Tìm link xác thực trong nội dung HTML
+          const authUrlPattern = /https:\/\/secure\.bugs\.co\.kr\/member\/join\/authCode\/check[^"'<\s]+/i;
+          const match = htmlContent.match(authUrlPattern);
 
-            // Tìm link xác thực trong nội dung HTML
-            const authUrlPattern = /https:\/\/secure\.bugs\.co\.kr\/member\/join\/authCode\/check[^"'<\s]+/i;
-            const match = htmlContent.match(authUrlPattern);
+          if (match) {
+            const rawAuthUrl = match[0];
+            const authUrl = decodeHtmlEntities(rawAuthUrl);
 
-            if (match) {
-              const rawAuthUrl = match[0];
-              const authUrl = decodeHtmlEntities(rawAuthUrl);
+            // Xác định email nhận thư
+            const toAddress = parsed.to?.value?.[0]?.address || '';
+            const deliveredTo = parsed.headers?.get?.('delivered-to') || '';
+            let targetEmail = toAddress || deliveredTo || '';
 
-              // Xác định email nhận thư (để ghi nhận trong log)
-              const toAddress = parsed.to?.value?.[0]?.address || '';
-              const deliveredTo = parsed.headers?.get?.('delivered-to') || '';
-              let targetEmail = toAddress || deliveredTo || '';
-
-              if (typeof targetEmail === 'object') {
-                targetEmail = targetEmail.initial || targetEmail.value || '';
-              }
-              targetEmail = String(targetEmail).trim().toLowerCase();
-
-              if (!targetEmail || !targetEmail.includes('@')) {
-                const matchEmail = htmlContent.match(/[a-zA-Z0-9._%+-]+\.[a-zA-Z0-9._%+-]+@gmail\.com/i);
-                if (matchEmail) targetEmail = matchEmail[0].toLowerCase();
-              }
-
-              console.log(`✉️ Người nhận (Alias): ${targetEmail || 'Không rõ'}`);
-
-              // Chạy Playwright để xác thực
-              const isOk = await authenticateBugsLink(authUrl);
-
-              if (isOk) {
-                successCount++;
-                // Đánh dấu email đã đọc
-                await client.messageFlagsAdd(msgId, ['\\Seen']);
-                console.log(`👁️ Đã đánh dấu email của [${targetEmail}] là ĐÃ ĐỌC (Seen).`);
-              } else {
-                console.log(`❌ Không thể xác thực tự động email này. Giữ trạng thái Chưa đọc để xử lý sau.`);
-              }
-            } else {
-              console.log(`⚠️ Không tìm thấy link xác thực trong email này.`);
+            if (typeof targetEmail === 'object') {
+              targetEmail = targetEmail.initial || targetEmail.value || '';
             }
+            targetEmail = String(targetEmail).trim().toLowerCase();
+
+            if (!targetEmail || !targetEmail.includes('@')) {
+              const matchEmail = htmlContent.match(/[a-zA-Z0-9._%+-]+\.[a-zA-Z0-9._%+-]+@gmail\.com/i);
+              if (matchEmail) targetEmail = matchEmail[0].toLowerCase();
+            }
+
+            console.log(`   ✉️ Người nhận (Alias): ${targetEmail || 'Không rõ'}`);
+
+            // Chạy Playwright để xác thực
+            const isOk = await authenticateBugsLink(authUrl);
+
+            if (isOk) {
+              successCount++;
+              // Đánh dấu email đã đọc
+              await client.messageFlagsAdd(msgId, ['\\Seen']);
+              console.log(`   👁️ Đã đánh dấu thư của [${targetEmail}] là ĐÃ ĐỌC (Seen).`);
+            } else {
+              console.log(`   ❌ Giữ trạng thái email Chưa đọc để xử lý sau.`);
+            }
+          } else {
+            console.log(`   ⚠️ Không tìm thấy link xác thực trong thư này.`);
           }
         } catch (msgError) {
-          console.error(`❌ Lỗi khi xử lý email msgId=${msgId}: ${msgError.message}`);
+          console.error(` ❌ Lỗi xử lý email: ${msgError.message}`);
         }
       }
 
-      console.log(`✨ Hoàn tất quét hòm thư: ${gmailConfig.user}`);
-      console.log(`📊 Đã xử lý: ${processedCount} thư của Bugs | Kích hoạt thành công: ${successCount} tài khoản.`);
+      console.log(`📊 Kết quả lượt quét: Đã xử lý ${processedCount} thư | Xác thực thành công: ${successCount} tài khoản.`);
 
     } finally {
       lock.release();
@@ -220,13 +211,14 @@ async function processGmailAccount(gmailConfig) {
 
     await client.logout();
   } catch (error) {
-    console.error(`❌ Lỗi khi kết nối hòm thư ${gmailConfig.user}: ${error.message}`);
+    console.error(`[${timeStr}] ❌ Lỗi khi kết nối hòm thư ${gmailConfig.user}: ${error.message}`);
   }
 }
 
 async function main() {
   console.log(`=======================================================`);
-  console.log(`🚀 BẮT ĐẦU QUÉT VÀ XÁC THỰC EMAIL ALIAS TỰ ĐỘNG`);
+  console.log(`🚀 KHỞI CHẠY THIẾT BỊ LỌC VÀ XÁC THỰC EMAIL TỰ ĐỘNG`);
+  console.log(`⏱️  Chế độ: Chạy liên tục (Quét tuần hoàn mỗi 15 giây)`);
   console.log(`=======================================================`);
 
   // 1. Nạp tất cả cấu hình Gmail
@@ -238,15 +230,15 @@ async function main() {
   }
 
   console.log(`📂 Đã nạp thành công cấu hình cho ${gmailConfigs.length} hòm thư Gmail.`);
+  console.log(`💡 Nhấn Ctrl + C để dừng dịch vụ.\n`);
 
-  // 2. Chạy quét tuần tự từng hòm thư
-  for (const config of gmailConfigs) {
-    await processGmailAccount(config);
+  // 2. Vòng lặp quét vô hạn
+  while (true) {
+    for (const config of gmailConfigs) {
+      await processGmailAccount(config);
+    }
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
   }
-
-  console.log(`\n=======================================================`);
-  console.log(`🎉 TOÀN BỘ TIẾN TRÌNH XÁC THỰC HOÀN TẤT!`);
-  console.log(`=======================================================`);
 }
 
 main().catch(console.error);
