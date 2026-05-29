@@ -121,6 +121,79 @@ async function launchSmartBrowser() {
   }
 }
 
+// Hàm vote cho TIAN Xiwei ngay lập tức sau khi xác thực thành công để tránh bị xóa account sau đó
+async function voteBugsFavorite(page) {
+  const BUGS_FAVORITE_URL = 'https://favorite.bugs.co.kr/3922';
+  console.log(`   🗳️ [VOTE OPTIMIZE] Phát hiện tài khoản đã xác thực xong. Bắt đầu điều hướng tới trang vote để bảo toàn tim: ${BUGS_FAVORITE_URL}`);
+  
+  try {
+    // 1. Điều hướng tới trang vote
+    await page.goto(BUGS_FAVORITE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3000); // Chờ load trang ổn định
+
+    // Đăng ký bộ lắng nghe dialog trên trang vote để auto-dismiss các cảnh báo
+    page.on('dialog', async (dialog) => {
+      const msg = dialog.message();
+      console.log(`   💬 [VOTE OPTIMIZE] Phát hiện popup thông báo: [${msg}]`);
+      await dialog.dismiss().catch(() => {});
+    });
+
+    // 2. Tìm candidate TIAN Xiwei
+    const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+    const voteButton = candidate.locator('button.btnVote[data-action="vote_candidate"]').first();
+
+    console.log('   🗳️ [VOTE OPTIMIZE] Chờ hiển thị nút Vote của TIAN Xiwei...');
+    await candidate.waitFor({ state: 'visible', timeout: 10000 });
+    await voteButton.waitFor({ state: 'visible', timeout: 10000 });
+    await voteButton.scrollIntoViewIfNeeded().catch(() => {});
+
+    console.log('   🗳️ [VOTE OPTIMIZE] Click nút vote candidate TIAN Xiwei...');
+    await voteButton.click({ timeout: 5000, force: true });
+
+    // 3. Đợi popup chọn số tim hiển thị
+    console.log('   🗳️ [VOTE OPTIMIZE] Đợi popup chọn tim hiển thị...');
+    const useAllButton = page.locator([
+      'div[class*="layer"] button:has-text("Use All")',
+      'div[class*="layer"] button:has-text("모두사용")',
+      '.layerBtn:has-text("Use All")',
+      '.layerBtn:has-text("모두사용")',
+      'button:has-text("Use All")',
+      'button:has-text("모두사용")'
+    ].join(', ')).filter({ visible: true }).first();
+
+    await useAllButton.waitFor({ state: 'visible', timeout: 8000 });
+    await useAllButton.click({ timeout: 5000, force: true }).catch(async () => {
+      await useAllButton.evaluate((button) => button.click());
+    });
+    console.log('   🗳️ [VOTE OPTIMIZE] Đã click nút Use All (모두사용).');
+
+    // 4. Tìm nút "VOTING" / "투표하기" trong popup
+    const popupVotingButton = page.locator([
+      'div[class*="layer"] button:has-text("투표하기")',
+      'div[class*="layer"] button:has-text("VOTING")',
+      'button.layerBtn:has-text("투표하기")',
+      'button.layerBtn:has-text("VOTING")',
+      '.layerBtn:has-text("투표하기")',
+      '.layerBtn:has-text("VOTING")'
+    ].join(', ')).filter({ visible: true }).first();
+
+    console.log('   🗳️ [VOTE OPTIMIZE] Đợi nút VOTING (투표하기) hiển thị...');
+    await popupVotingButton.waitFor({ state: 'visible', timeout: 8000 });
+    await popupVotingButton.click({ timeout: 5000, force: true }).catch(async () => {
+      await popupVotingButton.evaluate((button) => button.click());
+    });
+    console.log('   🗳️ [VOTE OPTIMIZE] Đã click nút VOTING (투표하기).');
+
+    console.log('   🗳️ [VOTE OPTIMIZE] Chờ 5 giây để website xử lý phiếu vote...');
+    await page.waitForTimeout(5000);
+    console.log('   ✅ [VOTE OPTIMIZE] Hoàn tất quá trình bỏ phiếu vote tối ưu!');
+    return true;
+  } catch (error) {
+    console.warn(`   ⚠️ [VOTE OPTIMIZE] Lỗi hoặc không có tim để vote: ${error.message}`);
+    return false;
+  }
+}
+
 // Hàm xác thực link Bugs bằng Playwright ẩn danh
 async function authenticateBugsLink(authUrl) {
   console.log(`   🤖 [SmartBrowser] Khởi chạy trình duyệt chống chặn để click xác thực...`);
@@ -167,6 +240,10 @@ async function authenticateBugsLink(authUrl) {
 
     if (isSuccess) {
       console.log(`   ✅ [Browser] Kích hoạt thành công trên trang chủ Bugs!`);
+      // Thực hiện bỏ phiếu vote ngay lập tức khi session của tài khoản mới đang đăng nhập trên trình duyệt
+      await voteBugsFavorite(page).catch((err) => {
+        console.warn(`   ⚠️ [VOTE OPTIMIZE] Lỗi khi thực hiện vote tối ưu: ${err.message}`);
+      });
       return true;
     } else {
       console.log(`   ❌ [Browser] Thất bại. URL: ${currentUrl}`);
