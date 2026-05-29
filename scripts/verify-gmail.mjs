@@ -122,72 +122,244 @@ async function launchSmartBrowser() {
 }
 
 // Hàm vote cho TIAN Xiwei ngay lập tức sau khi xác thực thành công để tránh bị xóa account sau đó
+const BUGS_FAVORITE_URL = 'https://favorite.bugs.co.kr/3922';
+const SCORE_HISTORY_PATH = path.resolve('data/vote-score-history.csv');
+const VOTE_RETRY_TIMEOUT_MS = 180_000;
+
+// Helper sleep
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function isVoteLoginRequired(page) {
+  return await page
+    .locator('text=/requires login|A service that requires login|로그인/i')
+    .first()
+    .isVisible({ timeout: 3000 })
+    .catch(() => false);
+}
+
+async function hasFavoriteCandidate(page) {
+  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote').first();
+  if (await voteButton.count().catch(() => 0)) {
+    return true;
+  }
+  const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+  return await candidate.count().catch(() => 0);
+}
+
+async function prepareFavoritePage(page) {
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
+  await page.locator('text=/ENG/i').first().click().catch(() => {});
+  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote').first();
+  if (await voteButton.count().catch(() => 0)) {
+    await voteButton.scrollIntoViewIfNeeded().catch(() => {});
+    return;
+  }
+  const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+  if (await candidate.count().catch(() => 0)) {
+    await candidate.scrollIntoViewIfNeeded().catch(() => {});
+  }
+}
+
+function csvValue(value) {
+  const text = String(value ?? '');
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+async function prependScoreHistory(row) {
+  const header = 'checked_at,tian_xiwei_votes,top1_votes';
+  const nextLine = [
+    csvValue(row.checkedAt),
+    row.tianXiweiVotes,
+    row.top1Votes
+  ].join(',');
+
+  let existingLines = [];
+  try {
+    existingLines = (await fs.readFile(SCORE_HISTORY_PATH, 'utf8'))
+      .split(/\r?\n/)
+      .filter(Boolean);
+  } catch {
+    existingLines = [];
+  }
+
+  const oldData = existingLines[0] === header ? existingLines.slice(1) : existingLines;
+  await fs.mkdir(path.dirname(SCORE_HISTORY_PATH), { recursive: true });
+  await fs.writeFile(SCORE_HISTORY_PATH, `${[header, nextLine, ...oldData].join('\n')}\n`);
+}
+
+async function recordVoteScores(page) {
+  const checkedAt = new Date().toISOString();
+  const scores = await page.evaluate(() => {
+    const normalizeName = (value) => (value || '').replace(/\s+/g, ' ').trim();
+    const parseCount = (value) => Number((value || '').replace(/[^\d]/g, '')) || 0;
+    const candidates = [...document.querySelectorAll('li')]
+      .map((item) => {
+        const name = normalizeName(item.querySelector('.info .title, p.title, .title')?.textContent);
+        const votes = parseCount(item.querySelector('.info .count, span.count, .count')?.textContent);
+        return { name, votes };
+      })
+      .filter((candidate) => candidate.name && candidate.votes);
+
+    const tian = candidates.find((candidate) => /TIAN\s+Xiwei/i.test(candidate.name));
+    const top1 = candidates[0] ?? candidates.reduce((best, candidate) => (
+      candidate.votes > (best?.votes ?? 0) ? candidate : best
+    ), null);
+
+    return {
+      tianXiweiVotes: tian?.votes ?? 0,
+      top1Votes: top1?.votes ?? 0
+    };
+  });
+
+  if (!scores.tianXiweiVotes || !scores.top1Votes) {
+    console.warn('   ⚠️ [VOTE OPTIMIZE] Không đọc được đầy đủ score vote để ghi CSV.');
+    return;
+  }
+
+  await prependScoreHistory({
+    checkedAt,
+    tianXiweiVotes: scores.tianXiweiVotes,
+    top1Votes: scores.top1Votes
+  }).catch(() => {});
+  console.log(`   🗳️ [VOTE OPTIMIZE] Đã ghi score: TIAN Xiwei ${scores.tianXiweiVotes}, top 1 ${scores.top1Votes}.`);
+}
+
 async function voteBugsFavorite(page) {
-  const BUGS_FAVORITE_URL = 'https://favorite.bugs.co.kr/3922';
   console.log(`   🗳️ [VOTE OPTIMIZE] Phát hiện tài khoản đã xác thực xong. Bắt đầu điều hướng tới trang vote để bảo toàn tim: ${BUGS_FAVORITE_URL}`);
   
+  const voteState = {
+    lastDialogMessage: '',
+    dialogReceived: false
+  };
+
+  // Đăng ký bộ lắng nghe dialog trên trang vote để auto-dismiss các cảnh báo
+  page.on('dialog', async (dialog) => {
+    const msg = dialog.message();
+    voteState.lastDialogMessage = msg;
+    voteState.dialogReceived = true;
+    console.log(`   💬 [VOTE OPTIMIZE] Phát hiện popup thông báo: [${msg}]`);
+    await dialog.dismiss().catch(() => {});
+  });
+
+  let scoreRecorded = false;
+  const deadline = Date.now() + VOTE_RETRY_TIMEOUT_MS;
+
   try {
-    // 1. Điều hướng tới trang vote
     await page.goto(BUGS_FAVORITE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(3000); // Chờ load trang ổn định
+    
+    for (let attempt = 1; Date.now() < deadline; attempt += 1) {
+      console.log(`   🗳️ [VOTE OPTIMIZE] Lần thử ${attempt}: kiểm tra trạng thái trang vote...`);
 
-    // Đăng ký bộ lắng nghe dialog trên trang vote để auto-dismiss các cảnh báo
-    page.on('dialog', async (dialog) => {
-      const msg = dialog.message();
-      console.log(`   💬 [VOTE OPTIMIZE] Phát hiện popup thông báo: [${msg}]`);
-      await dialog.dismiss().catch(() => {});
-    });
+      await page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {});
+      await sleep(2000);
 
-    // 2. Tìm candidate TIAN Xiwei
-    const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
-    const voteButton = candidate.locator('button.btnVote[data-action="vote_candidate"]').first();
+      const loginRequired = await isVoteLoginRequired(page);
+      if (loginRequired) {
+        console.warn('   ⚠️ [VOTE OPTIMIZE] Trang vote chưa nhận session login hoặc vẫn đang hiện thông báo login. Chờ thêm...');
+        await sleep(4000);
+        continue;
+      }
 
-    console.log('   🗳️ [VOTE OPTIMIZE] Chờ hiển thị nút Vote của TIAN Xiwei...');
-    await candidate.waitFor({ state: 'visible', timeout: 10000 });
-    await voteButton.waitFor({ state: 'visible', timeout: 10000 });
-    await voteButton.scrollIntoViewIfNeeded().catch(() => {});
+      const candidateVisible = await hasFavoriteCandidate(page);
+      if (!candidateVisible) {
+        console.warn('   ⚠️ [VOTE OPTIMIZE] Chưa thấy candidate TIAN Xiwei hoặc nút vote. Giữ nguyên trang và chờ load thêm...');
+        await sleep(4000);
+        continue;
+      }
 
-    console.log('   🗳️ [VOTE OPTIMIZE] Click nút vote candidate TIAN Xiwei...');
-    await voteButton.click({ timeout: 5000, force: true });
+      await prepareFavoritePage(page);
 
-    // 3. Đợi popup chọn số tim hiển thị
-    console.log('   🗳️ [VOTE OPTIMIZE] Đợi popup chọn tim hiển thị...');
-    const useAllButton = page.locator([
-      'div[class*="layer"] button:has-text("Use All")',
-      'div[class*="layer"] button:has-text("모두사용")',
-      '.layerBtn:has-text("Use All")',
-      '.layerBtn:has-text("모두사용")',
-      'button:has-text("Use All")',
-      'button:has-text("모두사용")'
-    ].join(', ')).filter({ visible: true }).first();
+      if (!scoreRecorded) {
+        await recordVoteScores(page).catch(() => {});
+        scoreRecorded = true;
+      }
 
-    await useAllButton.waitFor({ state: 'visible', timeout: 8000 });
-    await useAllButton.click({ timeout: 5000, force: true }).catch(async () => {
-      await useAllButton.evaluate((button) => button.click());
-    });
-    console.log('   🗳️ [VOTE OPTIMIZE] Đã click nút Use All (모두사용).');
+      console.log('   🗳️ [VOTE OPTIMIZE] Đã thấy candidate TIAN Xiwei. Thử bấm vote...');
+      
+      const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+      const voteButton = candidate.locator('button.btnVote[data-action="vote_candidate"]').first();
 
-    // 4. Tìm nút "VOTING" / "투표하기" trong popup
-    const popupVotingButton = page.locator([
-      'div[class*="layer"] button:has-text("투표하기")',
-      'div[class*="layer"] button:has-text("VOTING")',
-      'button.layerBtn:has-text("투표하기")',
-      'button.layerBtn:has-text("VOTING")',
-      '.layerBtn:has-text("투표하기")',
-      '.layerBtn:has-text("VOTING")'
-    ].join(', ')).filter({ visible: true }).first();
+      await candidate.waitFor({ state: 'visible', timeout: 10000 });
+      await voteButton.waitFor({ state: 'visible', timeout: 10000 });
+      await voteButton.scrollIntoViewIfNeeded().catch(() => {});
+      await voteButton.click({ timeout: 8000, force: true });
 
-    console.log('   🗳️ [VOTE OPTIMIZE] Đợi nút VOTING (투표하기) hiển thị...');
-    await popupVotingButton.waitFor({ state: 'visible', timeout: 8000 });
-    await popupVotingButton.click({ timeout: 5000, force: true }).catch(async () => {
-      await popupVotingButton.evaluate((button) => button.click());
-    });
-    console.log('   🗳️ [VOTE OPTIMIZE] Đã click nút VOTING (투표하기).');
+      console.log('   🗳️ [VOTE OPTIMIZE] Đợi popup chọn số tim hiển thị...');
+      const popupOpened = await page
+        .locator('button[data-ga-params="Favorite_투표하기-모두사용"], button:has-text("Use All")')
+        .first()
+        .waitFor({ state: 'visible', timeout: 5000 })
+        .then(() => true)
+        .catch(() => false);
 
-    console.log('   🗳️ [VOTE OPTIMIZE] Chờ 5 giây để website xử lý phiếu vote...');
-    await page.waitForTimeout(5000);
-    console.log('   ✅ [VOTE OPTIMIZE] Hoàn tất quá trình bỏ phiếu vote tối ưu!');
-    return true;
+      if (!popupOpened) {
+        console.warn('   ⚠️ [VOTE OPTIMIZE] Popup chưa mở qua click trực tiếp, thử click bằng evaluate...');
+        await voteButton.evaluate((button) => button.click());
+      }
+
+      // Tìm nút "Use All" (모두사용) trong popup
+      const useAllButton = page
+        .locator([
+          'div[class*="layer"] button:has-text("Use All")',
+          'div[class*="layer"] button:has-text("모두사용")',
+          'div[class*="layer"] a:has-text("Use All")',
+          'div[class*="layer"] a:has-text("모두사용")',
+          '.layerBtn:has-text("Use All")',
+          '.layerBtn:has-text("모두사용")',
+          'button[data-ga-params*="모두사용"]',
+          'button:has-text("Use All")',
+          'button:has-text("모두사용")'
+        ].join(', '))
+        .filter({ visible: true })
+        .first();
+
+      console.log('   🗳️ [VOTE OPTIMIZE] Đợi nút Use All (모두사용) hiển thị và click...');
+      await useAllButton.waitFor({ state: 'visible', timeout: 10000 });
+      await useAllButton.click({ timeout: 8000, force: true }).catch(async () => {
+        console.warn('   ⚠️ [VOTE OPTIMIZE] Click Use All trực tiếp thất bại, thử click bằng evaluate...');
+        await useAllButton.evaluate((button) => button.click());
+      });
+      console.log('   🗳️ [VOTE OPTIMIZE] Đã click nút Use All (모두사용).');
+
+      // Tìm nút "VOTING" / "투표하기" trong popup
+      const popupVotingButton = page
+        .locator([
+          'div[class*="layer"] button:has-text("투표하기")',
+          'div[class*="layer"] button:has-text("VOTING")',
+          'div[class*="layer"] a:has-text("투표하기")',
+          'div[class*="layer"] a:has-text("VOTING")',
+          'button.layerBtn:has-text("투표하기")',
+          'button.layerBtn:has-text("VOTING")',
+          'a.layerBtn:has-text("투표하기")',
+          'a.layerBtn:has-text("VOTING")',
+          '.layerBtn:has-text("투표하기")',
+          '.layerBtn:has-text("VOTING")',
+          'button[data-ga-params="Favorite_투표하기-투표하기"]'
+        ].join(', '))
+        .filter({ visible: true })
+        .first();
+
+      console.log('   🗳️ [VOTE OPTIMIZE] Đợi nút VOTING (투표하기) hiển thị và click...');
+      await popupVotingButton.waitFor({ state: 'visible', timeout: 10000 });
+      
+      // Reset trạng thái dialog trước khi click
+      voteState.lastDialogMessage = '';
+      voteState.dialogReceived = false;
+
+      await popupVotingButton.click({ timeout: 8000, force: true }).catch(async () => {
+        console.warn('   ⚠️ [VOTE OPTIMIZE] Click VOTING trực tiếp thất bại, thử click bằng evaluate...');
+        await popupVotingButton.evaluate((button) => button.click());
+      });
+      console.log('   🗳️ [VOTE OPTIMIZE] Đã click nút VOTING (투표하기).');
+
+      console.log('   🗳️ [VOTE OPTIMIZE] Chờ 5 giây để website xử lý phiếu vote...');
+      await sleep(5000);
+      console.log('   ✅ [VOTE OPTIMIZE] Hoàn tất quá trình bỏ phiếu vote tối ưu!');
+      return true;
+    }
+    
+    console.warn('   ⚠️ [VOTE OPTIMIZE] Hết thời gian retry vote mà vẫn chưa xác nhận được vote tự động.');
+    return false;
   } catch (error) {
     console.warn(`   ⚠️ [VOTE OPTIMIZE] Lỗi hoặc không có tim để vote: ${error.message}`);
     return false;
