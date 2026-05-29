@@ -27,7 +27,10 @@
       "scripts/**/*",
       "vote-assist.config.example.json",
       "package.json",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "Hướng_dẫn_sử_dụng_Tiếng_Việt.html",
+      "User_Manual_English.html",
+      "使用说明_中文.html"
     ],
     "extraMetadata": {
       "main": "app/main.cjs"

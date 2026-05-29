@@ -783,6 +783,9 @@
       <li class="nav-item" data-target="tinh-nang-an-toan">
         <a href="#tinh-nang-an-toan">🛡️ IP Safety Melt Sensor</a>
       </li>
+      <li class="nav-item" data-target="xac-thuc-imap">
+        <a href="#xac-thuc-imap">📬 Flow 6: Gmail IMAP Auth</a>
+      </li>
       <li class="nav-item" data-target="su-co-thuong-gap">
         <a href="#su-co-thuong-gap">🛠️ Easy Troubleshooting</a>
       </li>
@@ -1404,8 +1407,79 @@
       </div>
     </section>
 
+    <!-- GMAIL IMAP AUTO-VERIFICATION -->
+    <section id="xac-thuc-imap" class="flow-section">
+      <div class="flow-card">
+        <div class="flow-header">
+          <div class="flow-num">📬</div>
+          <h2 class="flow-title">Flow 6: Auto-Verification Setup (Gmail IMAP)</h2>
+        </div>
+        
+        <p class="flow-intro">
+          This feature completely automates the process of reading your Gmail inbox, extracting verification links sent by Bugs, solving Cloudflare's Turnstile captcha, and activating your account instantly in the background without any manual clicks.
+        </p>
+
+        <div class="steps-container">
+          <div class="step-card">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <div class="step-title">Enable 2-Step Verification on Google Account</div>
+              <p class="step-desc">
+                Log in to your Gmail account on a web browser. Access your Google Account Management by clicking your profile picture ➔ select <strong>Manage your Google Account</strong>.
+                <br>Go to the <strong>Security</strong> tab, scroll down to the "How you sign in to Google" section, and click on <strong>2-Step Verification</strong>. Proceed to enable it successfully.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <div class="step-title">Create an App Password</div>
+              <p class="step-desc">
+                Once 2-Step Verification is active, return to the search bar at the top of the Google Account page and search for <strong>"App passwords"</strong>.
+                <br>Under the app and device selection, select <strong>Other (Custom name)</strong>, type in any descriptive name (e.g., <em>Vote Assist</em>), and click <strong>Create</strong>.
+                <br>A popup will reveal a random <strong>16-character passcode</strong>. Select and copy this passcode, saving it somewhere secure (Google will only display this password once).
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <div class="step-title">Enable IMAP Access in Gmail Settings</div>
+              <p class="step-desc">
+                Open your Gmail inbox, click the <strong>Settings (Gear icon)</strong> in the top-right corner ➔ select <strong>See all settings</strong>.
+                <br>Navigate to the <strong>Forwarding and POP/IMAP</strong> tab.
+                <br>Scroll down to the "IMAP access" section, select <strong>Enable IMAP</strong>, and click <strong>Save Changes</strong> at the bottom of the page.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">4</div>
+            <div class="step-content">
+              <div class="step-title">Configure and Start Auto-Verification in the App</div>
+              <p class="step-desc">
+                Launch the <em>Tian Xiwei Vote Assist</em> application on your computer.
+                <br>Click the <strong>📬 Mail Auth</strong> (or <strong>📬 Xác thực Mail</strong> depending on language) button next to the instance options.
+                <br>Enter your Gmail address (e.g., <em>username@gmail.com</em>) and the 16-character App Password generated in Step 2, then click <strong>Add</strong>.
+                <br>Click the <strong>Start Scanning</strong> button. The status indicator will transition to <strong>Scanning... (ON)</strong>, and the dark terminal console on the right will display connection logs in real-time. You can now close this popup dialog—the background verifier will continue running silently to solve captchas and verify accounts as soon as new Bugs emails arrive!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert-box tip">
+          <div class="alert-icon">💡</div>
+          <div class="alert-content">
+            <strong>Optimal Background Execution:</strong> You can configure multiple Gmail accounts simultaneously. The background verifier will poll each inbox in a round-robin cycle without duplicate sessions or authentication conflicts.
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- TROUBLESHOOTING -->
-    <section id="su-co-thuropng-gap" class="flow-section">
+    <section id="su-co-thuong-gap" class="flow-section">
       <div class="flow-card" style="border-color: var(--danger);">
         <div class="flow-header">
           <div class="flow-num" style="background: rgba(255, 179, 179, 0.08); color: var(--danger); border-color: rgba(255, 179, 179, 0.25)">🛠️</div>

@@ -780,6 +780,9 @@
       <li class="nav-item" data-target="tinh-nang-an-toan">
         <a href="#tinh-nang-an-toan">🛡️ IP 异常自动安全熔断</a>
       </li>
+      <li class="nav-item" data-target="xac-thuc-imap">
+        <a href="#xac-thuc-imap">📬 流程 6: 自动邮件验证</a>
+      </li>
       <li class="nav-item" data-target="su-co-thuong-gap">
         <a href="#su-co-thuong-gap">🛠️ 简易故障快速排除</a>
       </li>
@@ -1396,6 +1399,77 @@
           Bugs 对同 IP 高频动作打击极其频繁。一旦您的网络在短时间内发起过多的注册，Bugs 就会锁定并封杀您的网络。
           为了防止账号被殃及池鱼造成废号，软件在运行时会持续监督日志输出。一旦任何一个多开窗口捕捉到了 Bugs 返回的 <code>Your IP is temporarily unavailable for membership</code> (您的网络已被临时禁用) 拦截通知，软件将瞬间启动<strong>全线自动紧急熔断</strong>：强行关闭所有活跃的分身进程和受控浏览器，中断操作，并向您的电脑发送通知，提示您立刻拔插光猫更换网络 IP 以保护资产。
         </p>
+      </div>
+    </section>
+
+    <!-- GMAIL IMAP AUTO-VERIFICATION -->
+    <section id="xac-thuc-imap" class="flow-section">
+      <div class="flow-card">
+        <div class="flow-header">
+          <div class="flow-num">📬</div>
+          <h2 class="flow-title">流程 6: 自动邮件验证配置流程 (Gmail IMAP)</h2>
+        </div>
+        
+        <p class="flow-intro">
+          此功能可帮助您完全自动化读取 Gmail 邮箱、提取 Bugs 验证链接、自动通过 Cloudflare Turnstile 人机验证并在后台瞬间激活账号，无需任何手动点击。
+        </p>
+
+        <div class="steps-container">
+          <div class="step-card">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <div class="step-title">开启 Google 账号的两步验证</div>
+              <p class="step-desc">
+                在网页浏览器中登录您的 Gmail 邮箱。点击右上角头像 ➔ 选择 <strong>管理您的 Google 账号</strong> (Google Account)。
+                <br>切换到 <strong>安全性</strong> (Security) 标签页，向下滚动到“您登录 Google 的方式”部分，点击 <strong>两步验证</strong> (2-Step Verification) 并按照步骤成功激活。
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <div class="step-title">生成应用专用密码 (App Password)</div>
+              <p class="step-desc">
+                两步验证成功开启后，回到 Google 账号页面顶部的搜索栏，搜索关键字 <strong>“应用专用密码”</strong> (App passwords)。
+                <br>在选择应用和设备选项中，选择 <strong>其他（自定义名称）</strong>，输入任何便于记忆的名字（例如：<em>Vote Assist</em>），然后点击 <strong>生成</strong> (Create)。
+                <br>弹窗中会显示一个由 <strong>16 位无空格字符</strong> 组成的随机密码。请复制并妥善保存此密码（Google 仅会展示一次此密码）。
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <div class="step-title">在 Gmail 设置中启用 IMAP 访问权限</div>
+              <p class="step-desc">
+                打开您的 Gmail 邮箱，点击右上角的 <strong>设置（齿轮图标）</strong> ➔ 选择 <strong>查看所有设置</strong> (See all settings)。
+                <br>切换到 <strong>转发和 POP/IMAP</strong> (Forwarding and POP/IMAP) 标签页。
+                <br>向下滚动到“IMAP 访问”部分，选中 <strong>启用 IMAP</strong> (Enable IMAP)，然后滚动到最下方点击 <strong>保存更改</strong> (Save Changes)。
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">4</div>
+            <div class="step-content">
+              <div class="step-title">在应用中配置并启动自动扫描</div>
+              <p class="step-desc">
+                在您的电脑上启动 <em>Tian Xiwei Vote Assist</em> 投票助手。
+                <br>点击分身列表上方的 <strong>📬 邮件验证</strong> (Xác thực Mail / Mail Auth) 按钮。
+                <br>在表单中输入您的 Gmail 地址（例如：<em>username@gmail.com</em>）和在步骤 2 中生成的 16 位应用密码，然后点击 <strong>添加</strong>。
+                <br>点击 <strong>开始扫描</strong> 按钮。状态将切换为 <strong>正在扫描... (ON)</strong>，右侧的黑色控制台将实时滚动显示连接日志。此时您可以关闭此弹窗——后台服务将继续保持运行，并在收到新的 Bugs 邮件时自动处理验证码并激活账号！
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert-box tip">
+          <div class="alert-icon">💡</div>
+          <div class="alert-content">
+            <strong>后台运行优化建议：</strong> 您可以同时配置多个 Gmail 邮箱账号。后台进程会循环扫描所有配置的邮箱，不会造成冲突或出现 Bugs 登录会话重叠。
+          </div>
+        </div>
       </div>
     </section>
 

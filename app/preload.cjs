@@ -27,11 +27,26 @@ contextBridge.exposeInMainWorld('txw', {
   
   // Shared Utilities
   downloadTemplate: (language, templateType, rootEmail, excludedAliases, aliasLimit) => ipcRenderer.invoke('instances:download-template', language, templateType, rootEmail, excludedAliases, aliasLimit),
+  openHelp: (language) => ipcRenderer.invoke('help:open', language),
   
   // Event listeners
   onSetupStatus: (callback) => ipcRenderer.on('setup-status', (_event, value) => callback(value)),
   onLog: (callback) => ipcRenderer.on('worker-log', (_event, payload) => callback(payload)),
   onRunState: (callback) => ipcRenderer.on('run-state', (_event, payload) => callback(payload)),
   onDataUpdated: (callback) => ipcRenderer.on('data-updated', (_event, payload) => callback(payload)),
-  onInstancesUpdated: (callback) => ipcRenderer.on('instances-updated', () => callback())
+  onInstancesUpdated: (callback) => ipcRenderer.on('instances-updated', () => callback()),
+
+  // IMAP Auto-Verification APIs
+  imap: {
+    getConfig: () => ipcRenderer.invoke('imap:get-config'),
+    saveConfig: (config) => ipcRenderer.invoke('imap:save-config', config),
+    start: () => ipcRenderer.invoke('imap:start'),
+    stop: () => ipcRenderer.invoke('imap:stop'),
+    getStatus: () => ipcRenderer.invoke('imap:status'),
+    onLog: (callback) => {
+      const listener = (_event, text) => callback(text);
+      ipcRenderer.on('imap-log', listener);
+      return () => ipcRenderer.removeListener('imap-log', listener);
+    }
+  }
 });

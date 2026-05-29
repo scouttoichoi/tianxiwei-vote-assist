@@ -1293,3 +1293,199 @@ td {
 .actionGroup .primaryAction.aliasSignup:active {
   transform: translateY(0);
 }
+
+/* Large Dialog for IMAP Auto-Verification */
+dialog.largeDialog {
+  width: min(1000px, calc(100vw - 40px));
+  height: min(620px, calc(100vh - 80px));
+  max-width: 100vw;
+  max-height: 100vh;
+}
+
+.imapDialogBody {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 20px;
+  padding: 20px;
+  height: calc(100% - 50px);
+  overflow: hidden;
+}
+
+.imapConfigSection,
+.imapLogsSection {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.imapConfigSection {
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  padding-right: 20px;
+}
+
+.imapServiceControl {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-height: 52px;
+}
+
+.imapStatusLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.imapToggleBtn {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 6px 18px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.imapToggleBtn.start {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  color: white;
+}
+
+.imapToggleBtn.start:hover {
+  background: linear-gradient(135deg, #57d38b 0%, #44b678 100%);
+  transform: translateY(-1px);
+}
+
+.imapToggleBtn.stop {
+  background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+  color: white;
+  animation: pulseStop 1.8s infinite;
+}
+
+.imapToggleBtn.stop:hover {
+  background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+  transform: translateY(-1px);
+}
+
+.imapDivider {
+  width: 100%;
+  border: 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  margin: 16px 0;
+}
+
+.imapAddAccountForm h4,
+.imapAccountsList h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #d1a8ff;
+  letter-spacing: -0.2px;
+}
+
+.imapFormRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.imapFormRow input {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  color: white;
+  font: inherit;
+  font-size: 12px;
+}
+
+.imapFormRow input:focus {
+  border-color: #d1a8ff;
+  outline: none;
+}
+
+.imapAccountsList {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.imapTableWrapper {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.imapTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.imapTable th {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  letter-spacing: 0.5px;
+}
+
+.imapTable td {
+  padding: 12px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+  vertical-align: middle;
+}
+
+.imapTable tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Right Column Logs */
+.imapLogsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0 10px;
+}
+
+.imapLogsHeader span {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffd3b6;
+}
+
+.imapTerminal {
+  flex: 1;
+  background: #050403;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  color: #8bffb8;
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 14px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  box-shadow: inset 0 4px 20px rgba(0, 0, 0, 0.8);
+}
+

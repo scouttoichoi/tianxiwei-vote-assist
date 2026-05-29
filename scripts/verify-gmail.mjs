@@ -10,8 +10,28 @@ const POLL_INTERVAL_MS = 5000; // Quét lại sau mỗi 5 giây
 // Cache lưu trữ các kết nối IMAP trường tồn
 const activeClients = new Map();
 
-// Tải tất cả cấu hình Gmail từ file vote-assist.config.json cục bộ
+// Tải tất cả cấu hình Gmail từ tham số dòng lệnh hoặc file vote-assist.config.json cục bộ
 async function loadGmailConfigs() {
+  // 1. Kiểm tra tham số dòng lệnh --config-json phục vụ đóng gói app
+  const configJsonIdx = process.argv.indexOf('--config-json');
+  if (configJsonIdx !== -1 && process.argv[configJsonIdx + 1]) {
+    try {
+      const parsed = JSON.parse(process.argv[configJsonIdx + 1]);
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      const validConfigs = list
+        .filter(item => item && item.user && item.pass)
+        .map(item => ({
+          user: item.user.trim(),
+          pass: item.pass.replace(/\s+/g, '').trim(),
+          configPath: 'CLI Arguments'
+        }));
+      if (validConfigs.length > 0) return validConfigs;
+    } catch (err) {
+      console.error(`⚠️ Lỗi phân tích cú pháp cấu hình Gmail từ đối số CLI: ${err.message}`);
+    }
+  }
+
+  // 2. Dự phòng: Tải từ file cấu hình cục bộ
   const configPath = path.resolve('vote-assist.config.json');
   try {
     const content = await fs.readFile(configPath, 'utf8');

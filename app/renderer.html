@@ -31,12 +31,10 @@
         <select id="languageSelect" class="languageSelect" aria-label="Language">
           <option value="vi">Tiếng Việt</option>
           <option value="zh">中文</option>
-          <option value="ko">한국어</option>
           <option value="en">English</option>
         </select>
 
         <button class="helpButton dark" id="helpButtonMain" data-i18n="help">Hướng dẫn sử dụng</button>
-        <button class="helpButton dark" id="farmAdsGuideButton" data-i18n="farmAdsGuide">Hướng dẫn farm ADS</button>
       </div>
     </header>
 
@@ -46,9 +44,14 @@
       <section class="leftPanel">
         <div class="panelHeaderBar">
           <h2 data-i18n="instancesTitle">Danh sách phiên bản</h2>
-          <button class="primaryAction btnAddInstance" id="addInstanceButton">
-            <span data-i18n="addInstance">+ Thêm phiên bản</span>
-          </button>
+          <div style="display: flex; gap: 8px;">
+            <button class="primaryAction secondary btnMailAuth" id="mailAuthButton" style="background: rgba(209, 168, 255, 0.15); color: #d1a8ff; border: 1px solid rgba(209, 168, 255, 0.3);">
+              <span data-i18n="mailAuthBtn">📬 Xác thực Mail</span>
+            </button>
+            <button class="primaryAction btnAddInstance" id="addInstanceButton">
+              <span data-i18n="addInstance">+ Thêm phiên bản</span>
+            </button>
+          </div>
         </div>
 
         <div class="globalInstanceControls">
@@ -348,6 +351,58 @@
 
       <div class="countDialogActions">
         <button id="confirmTemplateChoiceDialog" data-i18n="start">Tải xuống</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Gmail IMAP Auto-Verification Dialog -->
+  <dialog id="imapDialog" class="largeDialog">
+    <div class="modalHeader">
+      <strong data-i18n="imapDialogTitle">Tự động Xác thực Email (Gmail IMAP)</strong>
+      <button id="closeImapDialog" data-i18n="close">Đóng</button>
+    </div>
+    <div class="imapDialogBody">
+      <!-- Left Column: Config & Service status -->
+      <div class="imapConfigSection">
+        <div class="imapServiceControl">
+          <span class="imapStatusLabel" data-i18n="imapStatusLabel">Trạng thái dịch vụ:</span>
+          <span id="imapStatusBadge" class="badgeStatus idle" data-i18n="imapStatusOff">Đang dừng</span>
+          <button id="imapServiceToggleBtn" class="imapToggleBtn start" data-i18n="imapStartBtn">Bắt đầu quét</button>
+        </div>
+        <hr class="imapDivider">
+        <div class="imapAddAccountForm">
+          <h4 data-i18n="imapAddAccountHeader">Thêm tài khoản Gmail mới</h4>
+          <div class="imapFormRow">
+            <input type="email" id="imapInputUser" placeholder="username@gmail.com">
+            <input type="password" id="imapInputPass" placeholder="App Password (16 ký tự)" style="font-family: inherit;">
+            <button id="imapAddAccountBtn" class="primaryAction" data-i18n="imapAddBtn" style="min-height: 36px; padding: 0 16px; border-radius: 6px; background: #fff; color: #1b1714; font-weight: 800;">Thêm</button>
+          </div>
+        </div>
+        <div class="imapAccountsList">
+          <h4 data-i18n="imapAccountsHeader">Tài khoản đã cấu hình</h4>
+          <div class="imapTableWrapper">
+            <table class="imapTable">
+              <thead>
+                <tr>
+                  <th>Gmail</th>
+                  <th>App Password</th>
+                  <th class="textCenter" data-i18n="action">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="imapAccountsTableBody">
+                <!-- Configured accounts rows will be dynamically loaded here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- Right Column: Monospace Terminal Console -->
+      <div class="imapLogsSection">
+        <div class="imapLogsHeader">
+          <span data-i18n="imapLogsHeader">Nhật ký quét ngầm (Live Logs)</span>
+          <button id="imapClearLogsBtn" class="miniButton" data-i18n="imapClearLogs">Xóa log</button>
+        </div>
+        <pre id="imapTerminalOutput" class="imapTerminal"></pre>
       </div>
     </div>
   </dialog>

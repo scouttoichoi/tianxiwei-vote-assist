@@ -45,7 +45,6 @@ const downloadTemplateButton = document.getElementById('downloadTemplateButton')
 const historyButton = document.getElementById('historyButton');
 const helpButtonMain = document.getElementById('helpButtonMain');
 const helpButton = document.getElementById('helpButton');
-const farmAdsGuideButton = document.getElementById('farmAdsGuideButton');
 
 // Import Choice Dialog
 const importChoiceDialog = document.getElementById('importChoiceDialog');
@@ -236,6 +235,11 @@ function applyLanguage(language) {
     element.title = t(element.dataset.i18nTitle);
   });
 
+  const imapInputUser = document.getElementById('imapInputUser');
+  const imapInputPass = document.getElementById('imapInputPass');
+  if (imapInputUser) imapInputUser.placeholder = t('imapInputUserPlaceholder') || 'username@gmail.com';
+  if (imapInputPass) imapInputPass.placeholder = t('imapInputPassPlaceholder') || 'App Password (16 chars)';
+
   if (languageSelect) {
     languageSelect.value = language;
   }
@@ -265,7 +269,6 @@ function updateFormatters(lang) {
   const localeMap = {
     vi: 'vi-VN',
     zh: 'zh-CN',
-    ko: 'ko-KR',
     en: 'en-US'
   };
   const locale = localeMap[lang] || 'vi-VN';
@@ -1315,33 +1318,9 @@ async function showHistory() {
   `);
 }
 
-function showHelp() {
-  openModal(t('helpTitle'), `
-    <p><strong>${t('helpSignupTitle')}</strong>: ${t('helpSignupBody')}</p>
-    <p><strong>${t('helpLoginTitle')}</strong>: ${t('helpLoginBody')}</p>
-    <p><strong>${t('helpImportTitle')}</strong>: ${t('helpImportBody')}</p>
-    <p><strong>${t('helpImportTemplateTitle')}</strong>: ${t('helpImportTemplateBody')}</p>
-    <p><strong>${t('helpImportPrivacyTitle')}</strong>: ${t('helpImportPrivacyBody')}</p>
-    <p><strong>${t('helpCaptchaTitle')}</strong>: ${t('helpCaptchaBody')}</p>
-    <p><strong>${t('helpAccountTitle')}</strong>: ${t('helpAccountBody')}</p>
-    <p><strong>${t('helpNoteTitle')}</strong>: ${t('helpNoteBody')}</p>
-  `);
-}
 
-function showFarmAdsGuide() {
-  openModal(t('farmAdsGuideTitle'), `
-    <p>${t('farmAdsGuideIntro')}</p>
-    <p><strong>${t('farmAdsGuideBluestacksTitle')}</strong></p>
-    <ol>
-      <li>${t('farmAdsGuideBluestacksStep1')}</li>
-      <li>${t('farmAdsGuideBluestacksStep2')}</li>
-      <li>${t('farmAdsGuideBluestacksStep3')}</li>
-      <li>${t('farmAdsGuideBluestacksStep4')}</li>
-      <li>${t('farmAdsGuideBluestacksStep5')}</li>
-      <li>${t('farmAdsGuideBluestacksStep6')}</li>
-    </ol>
-  `);
-}
+
+
 //
 async function openEmulatorPicker() {
   emulatorPickerInstanceId = selectedInstanceId;
@@ -1977,9 +1956,8 @@ adsButton.addEventListener('click', async () => {
 });
 accountsButton.addEventListener('click', showAccounts);
 historyButton.addEventListener('click', showHistory);
-helpButton.addEventListener('click', showHelp);
-helpButtonMain.addEventListener('click', showHelp);
-farmAdsGuideButton?.addEventListener('click', showFarmAdsGuide);
+helpButton.addEventListener('click', () => window.txw.openHelp(currentLanguage));
+helpButtonMain.addEventListener('click', () => window.txw.openHelp(currentLanguage));
 
 // Emulator Selection Dialog Events
 closeEmulatorDialog.addEventListener('click', () => emulatorDialog.close());
@@ -2320,6 +2298,213 @@ stopAllButton.addEventListener('click', async () => {
   await window.txw.stopAllInstances();
 });
 
+// =========================================================
+// Gmail IMAP Auto-Verification & Accounts Manager Handlers
+// =========================================================
+
+// IMAP Auto-Verification Elements
+const mailAuthButton = document.getElementById('mailAuthButton');
+const imapDialog = document.getElementById('imapDialog');
+const closeImapDialog = document.getElementById('closeImapDialog');
+const imapStatusBadge = document.getElementById('imapStatusBadge');
+const imapServiceToggleBtn = document.getElementById('imapServiceToggleBtn');
+const imapInputUser = document.getElementById('imapInputUser');
+const imapInputPass = document.getElementById('imapInputPass');
+const imapAddAccountBtn = document.getElementById('imapAddAccountBtn');
+const imapAccountsTableBody = document.getElementById('imapAccountsTableBody');
+const imapTerminalOutput = document.getElementById('imapTerminalOutput');
+const imapClearLogsBtn = document.getElementById('imapClearLogsBtn');
+
+let imapAccountsList = [];
+let imapRunning = false;
+let imapLogUnsubscribe = null;
+
+// Render Gmail accounts list in table
+function renderImapAccountsTable() {
+  imapAccountsTableBody.innerHTML = '';
+  
+  if (imapAccountsList.length === 0) {
+    imapAccountsTableBody.innerHTML = `
+      <tr>
+        <td colspan="3" style="text-align: center; color: rgba(255,255,255,0.4); padding: 20px;">
+          ${t('imapNoAccounts')}
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  imapAccountsList.forEach((acc, index) => {
+    const row = document.createElement('tr');
+    
+    // Mask App Password for premium security feel
+    const maskedPass = acc.pass ? '•••• •••• •••• ••••' : '—';
+    
+    row.innerHTML = `
+      <td style="font-weight: 700;">${escapeHtml(acc.user)}</td>
+      <td style="font-family: monospace; letter-spacing: 1px;">${maskedPass}</td>
+      <td class="textCenter">
+        <button class="miniButton btnRowDelete" data-index="${index}" style="min-height: 24px; padding: 2px 8px; font-size:11px;">
+          Xóa
+        </button>
+      </td>
+    `;
+    
+    // Delete event listener
+    row.querySelector('.btnRowDelete').addEventListener('click', async (e) => {
+      const idx = parseInt(e.target.getAttribute('data-index'), 10);
+      imapAccountsList.splice(idx, 1);
+      
+      // Save changes immediately
+      await window.txw.imap.saveConfig({
+        accounts: imapAccountsList,
+        running: imapRunning
+      });
+      
+      renderImapAccountsTable();
+    });
+
+    imapAccountsTableBody.appendChild(row);
+  });
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Update the UI controls based on active status
+function updateImapStatusUI(running) {
+  imapRunning = running;
+  
+  if (running) {
+    imapStatusBadge.className = 'badgeStatus running';
+    imapStatusBadge.textContent = t('imapStatusOn');
+    imapStatusBadge.setAttribute('data-i18n', 'imapStatusOn');
+    
+    imapServiceToggleBtn.className = 'imapToggleBtn stop';
+    imapServiceToggleBtn.textContent = t('imapStopBtn');
+    imapServiceToggleBtn.setAttribute('data-i18n', 'imapStopBtn');
+  } else {
+    imapStatusBadge.className = 'badgeStatus idle';
+    imapStatusBadge.textContent = t('imapStatusOff');
+    imapStatusBadge.setAttribute('data-i18n', 'imapStatusOff');
+    
+    imapServiceToggleBtn.className = 'imapToggleBtn start';
+    imapServiceToggleBtn.textContent = t('imapStartBtn');
+    imapServiceToggleBtn.setAttribute('data-i18n', 'imapStartBtn');
+  }
+}
+
+// Open/Close Dialog Events
+mailAuthButton?.addEventListener('click', async () => {
+  // Load current configuration
+  const config = await window.txw.imap.getConfig();
+  imapAccountsList = config.accounts || [];
+  updateImapStatusUI(config.running);
+  
+  // Render table
+  renderImapAccountsTable();
+  
+  // Open dialog modal
+  imapDialog.showModal();
+
+  // Stream logs
+  if (imapLogUnsubscribe) imapLogUnsubscribe();
+  imapLogUnsubscribe = window.txw.imap.onLog((text) => {
+    imapTerminalOutput.textContent += text;
+    // Auto-scroll logs
+    imapTerminalOutput.scrollTop = imapTerminalOutput.scrollHeight;
+  });
+});
+
+closeImapDialog?.addEventListener('click', () => {
+  if (imapLogUnsubscribe) {
+    imapLogUnsubscribe();
+    imapLogUnsubscribe = null;
+  }
+  imapDialog.close();
+});
+
+imapDialog?.addEventListener('cancel', () => {
+  if (imapLogUnsubscribe) {
+    imapLogUnsubscribe();
+    imapLogUnsubscribe = null;
+  }
+  imapDialog.close();
+});
+
+// Clear logs button
+imapClearLogsBtn?.addEventListener('click', () => {
+  imapTerminalOutput.textContent = '';
+});
+
+// Add account action
+imapAddAccountBtn?.addEventListener('click', async () => {
+  const user = imapInputUser.value.trim();
+  const pass = imapInputPass.value.trim();
+  
+  if (!user || !user.includes('@')) {
+    openModal('Lỗi', '<p>Vui lòng nhập địa chỉ Gmail hợp lệ.</p>');
+    return;
+  }
+  
+  if (pass.length < 8) {
+    openModal('Lỗi', '<p>App Password phải có độ dài hợp lệ (thường là 16 ký tự).</p>');
+    return;
+  }
+
+  // Check if account already exists
+  if (imapAccountsList.some(acc => acc.user.toLowerCase() === user.toLowerCase())) {
+    openModal('Lỗi', '<p>Tài khoản Gmail này đã được cấu hình.</p>');
+    return;
+  }
+
+  imapAccountsList.push({ user, pass });
+  
+  // Clear inputs
+  imapInputUser.value = '';
+  imapInputPass.value = '';
+  
+  // Save changes
+  await window.txw.imap.saveConfig({
+    accounts: imapAccountsList,
+    running: imapRunning
+  });
+  
+  renderImapAccountsTable();
+});
+
+// Start/Stop service button
+imapServiceToggleBtn?.addEventListener('click', async () => {
+  if (imapRunning) {
+    // Stop Service
+    const res = await window.txw.imap.stop();
+    if (res.ok) {
+      updateImapStatusUI(false);
+    } else {
+      openModal('Lỗi', `<p>${res.error}</p>`);
+    }
+  } else {
+    // Start Service
+    if (imapAccountsList.length === 0) {
+      openModal('Lỗi', '<p>Vui lòng thêm ít nhất một tài khoản Gmail trước khi bắt đầu.</p>');
+      return;
+    }
+
+    const res = await window.txw.imap.start();
+    if (res.ok) {
+      updateImapStatusUI(true);
+    } else {
+      openModal('Lỗi', `<p>${res.error}</p>`);
+    }
+  }
+});
+
 // First Init app
 (async () => {
   applyLanguage(currentLanguage);
@@ -2329,6 +2514,14 @@ stopAllButton.addEventListener('click', async () => {
   } catch (error) {
     setupStatus.textContent = t('setupFailed');
     console.error(error);
+  }
+
+  // Query initial IMAP service status
+  try {
+    const imapConfig = await window.txw.imap.getConfig();
+    updateImapStatusUI(imapConfig.running);
+  } catch (err) {
+    console.error('Failed to fetch IMAP service status:', err);
   }
 
   await refreshInstances();

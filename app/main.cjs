@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeImage, Notification, utilityProcess, dialog, screen, session } = require('electron'); const path = require('node:path');
+const { app, BrowserWindow, ipcMain, nativeImage, Notification, utilityProcess, dialog, screen, session, shell } = require('electron'); const path = require('node:path');
 const { fork, execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
@@ -12,6 +12,7 @@ const activeWorkers = new Map(); // key: instanceId, value: childProcess
 const activeWorkerModes = new Map(); // key: instanceId, value: current UI mode
 const stoppingWorkers = new Set(); // key: instanceId, true when user intentionally stops a worker
 const activeAdbDevices = new Map(); // // adbLockKey -> instanceId
+let activeImapChild = null; // tracking the active Gmail IMAP verifier process
 let lastNotificationKey = '';
 let setupPromise = null;
 let ipBlockStopInProgress = false;
@@ -1053,6 +1054,32 @@ ipcMain.handle('setup:first-run', async () => {
   return true;
 });
 
+ipcMain.handle('help:open', async (_event, language) => {
+  const helpFiles = {
+    vi: 'Hướng_dẫn_sử_dụng_Tiếng_Việt.html',
+    en: 'User_Manual_English.html',
+    zh: '使用说明_中文.html'
+  };
+
+  const file = helpFiles[language] || helpFiles['en'];
+  const fullPath = path.join(__dirname, '..', file);
+
+  const helpWin = new BrowserWindow({
+    width: 1000,
+    height: 800,
+    title: 'Hướng dẫn sử dụng - User Manual',
+    backgroundColor: '#0f0a08',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  helpWin.removeMenu();
+  helpWin.loadFile(fullPath);
+  return { ok: true };
+});
+
 // Quản lý Instance
 ipcMain.handle('instances:list', async () => {
   const settings = await loadGlobalSettings();
@@ -1768,6 +1795,109 @@ ipcMain.handle('instances:download-template', async (_event, language = 'vi', te
   };
 });
 
+// ==========================================
+// Gmail IMAP Auto-Verification IPC Handlers
+// ==========================================
+
+function getImapScriptPath() {
+  let p = path.join(__dirname, '..', 'scripts', 'verify-gmail.mjs');
+  if (p.includes('app.asar') && !p.includes('app.asar.unpacked')) {
+    p = p.replace('app.asar', 'app.asar.unpacked');
+  }
+  return p;
+}
+
+ipcMain.handle('imap:get-config', async () => {
+  const settings = await loadGlobalSettings();
+  return settings.imapConfig || { accounts: [], running: false };
+});
+
+ipcMain.handle('imap:save-config', async (_event, config) => {
+  const settings = await loadGlobalSettings();
+  settings.imapConfig = config;
+  await saveGlobalSettings(settings);
+  return { ok: true };
+});
+
+ipcMain.handle('imap:status', () => {
+  return { running: !!activeImapChild };
+});
+
+ipcMain.handle('imap:start', async () => {
+  if (activeImapChild) {
+    return { ok: false, error: 'Tiến trình xác thực đang chạy.' };
+  }
+
+  const settings = await loadGlobalSettings();
+  const config = settings.imapConfig || { accounts: [], running: false };
+  if (!config.accounts || config.accounts.length === 0) {
+    return { ok: false, error: 'Chưa cấu hình tài khoản Gmail.' };
+  }
+
+  const scriptPath = getImapScriptPath();
+  const args = ['--config-json', JSON.stringify(config.accounts)];
+
+  try {
+    activeImapChild = fork(scriptPath, args, {
+      stdio: 'pipe'
+    });
+
+    // Cập nhật trạng thái chạy trong config lưu trữ
+    config.running = true;
+    settings.imapConfig = config;
+    await saveGlobalSettings(settings);
+
+    activeImapChild.stdout?.on('data', (data) => {
+      const text = data.toString();
+      send('imap-log', text);
+    });
+
+    activeImapChild.stderr?.on('data', (data) => {
+      const text = data.toString();
+      send('imap-log', `[ERROR] ${text}`);
+    });
+
+    activeImapChild.on('close', async (code) => {
+      activeImapChild = null;
+      
+      // Đồng bộ trạng thái đã tắt trong config
+      const currentSettings = await loadGlobalSettings();
+      if (currentSettings.imapConfig) {
+        currentSettings.imapConfig.running = false;
+        await saveGlobalSettings(currentSettings);
+      }
+      send('imap-log', `\n[System] Dịch vụ đã đóng với mã code: ${code}\n`);
+    });
+
+    send('imap-log', `[System] Đang khởi chạy dịch vụ Xác thực Gmail...\n`);
+    return { ok: true };
+  } catch (error) {
+    activeImapChild = null;
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('imap:stop', async () => {
+  if (!activeImapChild) {
+    return { ok: true };
+  }
+
+  try {
+    activeImapChild.kill('SIGTERM');
+    activeImapChild = null;
+    
+    // Đồng bộ lại trạng thái tắt
+    const settings = await loadGlobalSettings();
+    if (settings.imapConfig) {
+      settings.imapConfig.running = false;
+      await saveGlobalSettings(settings);
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
 app.whenReady().then(createWindow);
 
 app.whenReady().then(() => {
@@ -1779,9 +1909,18 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  if (activeImapChild) {
+    try { activeImapChild.kill('SIGKILL'); } catch {}
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+app.on('will-quit', () => {
+  if (activeImapChild) {
+    try { activeImapChild.kill('SIGKILL'); } catch {}
+  }
 });

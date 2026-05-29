@@ -780,6 +780,9 @@
       <li class="nav-item" data-target="tinh-nang-an-toan">
         <a href="#tinh-nang-an-toan">🛡️ Cơ chế ngắt an toàn IP</a>
       </li>
+      <li class="nav-item" data-target="xac-thuc-imap">
+        <a href="#xac-thuc-imap">📬 Q.Trình 6: Xác thực Mail IMAP</a>
+      </li>
       <li class="nav-item" data-target="su-co-thuong-gap">
         <a href="#su-co-thuong-gap">🛠️ Khắc phục sự có nhanh</a>
       </li>
@@ -1395,6 +1398,77 @@
     </section>
 
     <!-- TROUBLESHOOTING -->
+    <!-- GMAIL IMAP AUTO-VERIFICATION -->
+    <section id="xac-thuc-imap" class="flow-section">
+      <div class="flow-card">
+        <div class="flow-header">
+          <div class="flow-num">📬</div>
+          <h2 class="flow-title">Quy trình 6: Cấu Hình Tự Động Xác Thực Email (Gmail IMAP)</h2>
+        </div>
+        
+        <p class="flow-intro">
+          Tính năng này giúp bạn tự động hóa hoàn toàn việc đọc hòm thư Gmail, lấy link xác thực từ Bugs, tự động giải captcha Turnstile của Cloudflare và kích hoạt tài khoản ngay lập tức ở chế độ chạy ngầm mà không cần click tay.
+        </p>
+
+        <div class="steps-container">
+          <div class="step-card">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <div class="step-title">Bật xác minh 2 bước trên tài khoản Google</div>
+              <p class="step-desc">
+                Đăng nhập tài khoản Gmail của bạn trên trình duyệt web. Truy cập vào trang quản lý tài khoản Google bằng cách click ảnh đại diện -> chọn <strong>Quản lý tài khoản Google của bạn</strong> (Google Account).
+                <br>Chuyển đến tab <strong>Bảo mật</strong> (Security), cuộn xuống phần "Cách bạn đăng nhập vào Google" và click chọn <strong>Xác minh 2 bước</strong> (2-Step Verification) -> Tiến hành kích hoạt thành công.
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <div class="step-title">Tạo Mật khẩu ứng dụng (App Password)</div>
+              <p class="step-desc">
+                Sau khi kích hoạt xác minh 2 bước thành công, quay lại ô tìm kiếm ở đầu trang tài khoản Google và tìm từ khóa <strong>"Mật khẩu ứng dụng"</strong> (hoặc "App passwords").
+                <br>Ở ô chọn ứng dụng và thiết bị, click chọn loại <strong>Khác (Tên tùy ý)</strong>, nhập một tên gợi nhớ bất kỳ (ví dụ: <em>Vote Assist</em>) rồi bấm <strong>Tạo</strong> (Create).
+                <br>Một popup sẽ hiển thị mật khẩu ngẫu nhiên gồm <strong>16 ký tự viết liền</strong>. Hãy bôi đen copy và lưu trữ mật khẩu này thật kỹ (Google chỉ hiển thị duy nhất 1 lần).
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <div class="step-title">Bật quyền truy cập giao thức IMAP trong cài đặt Gmail</div>
+              <p class="step-desc">
+                Mở hòm thư Gmail của bạn, click vào biểu tượng <strong>Cài đặt (Răng cưa)</strong> ở góc trên bên phải -> Chọn <strong>Xem tất cả chế độ cài đặt</strong> (See all settings).
+                <br>Chuyển đến tab <strong>Chuyển tiếp và POP/IMAP</strong> (Forwarding and POP/IMAP).
+                <br>Cuộn xuống mục "Truy cập qua IMAP" (IMAP access), tích chọn <strong>Bật IMAP</strong> (Enable IMAP) rồi cuộn xuống dưới cùng bấm <strong>Lưu thay đổi</strong> (Save Changes).
+              </p>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div class="step-badge">4</div>
+            <div class="step-content">
+              <div class="step-title">Cấu hình và Kích hoạt Quét tự động trên App</div>
+              <p class="step-desc">
+                Mở ứng dụng <em>Tian Xiwei Vote Assist</em> trên máy tính của bạn.
+                <br>Click vào nút <strong>📬 Xác thực Mail</strong> ở đầu danh sách phiên bản.
+                <br>Điền địa chỉ Gmail (ví dụ: <em>username@gmail.com</em>) và Mật khẩu ứng dụng 16 ký tự vừa tạo ở Bước 2 vào ô tương ứng, sau đó bấm <strong>Thêm</strong>.
+                <br>Bấm nút <strong>Bắt đầu quét</strong>. Trạng thái sẽ chuyển thành <strong>Đang quét... (ON)</strong> và terminal console bên phải sẽ tự động hiển thị log kết nối. Lúc này, bạn có thể đóng popup lại, hệ thống sẽ chạy quét ngầm tự động giải captcha và kích hoạt nick mỗi khi có email mới từ Bugs!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert-box tip">
+          <div class="alert-icon">💡</div>
+          <div class="alert-content">
+            <strong>Mẹo tối ưu chạy ngầm:</strong> Bạn có thể thêm cấu hình cho nhiều hòm thư Gmail cùng lúc. Tiến trình quét ngầm sẽ quét tuần hoàn tất cả các hòm thư này mà không gây đúp hay xung đột session đăng nhập Bugs.
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="su-co-thuong-gap" class="flow-section">
       <div class="flow-card" style="border-color: var(--danger);">
         <div class="flow-header">
