@@ -26,5 +26,6 @@ Thumbs.db
 .vscode/
 __MACOSX/
 
-scripts/solve_captcha/solve_captcha.exe
+scripts/solve_captcha/
+scripts/solve_captcha.spec
 scripts/solve_captcha_mac

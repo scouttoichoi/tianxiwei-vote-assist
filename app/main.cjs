@@ -1838,7 +1838,7 @@ ipcMain.handle('imap:start', async () => {
   const args = ['--config-json', JSON.stringify(config.accounts)];
 
   try {
-    activeImapChild = utilityProcess.fork(scriptPath, args, {
+    activeImapChild = fork(scriptPath, args, {
       stdio: 'pipe'
     });
 
@@ -1857,7 +1857,7 @@ ipcMain.handle('imap:start', async () => {
       send('imap-log', `[ERROR] ${text}`);
     });
 
-    activeImapChild.on('exit', async (code) => {
+    activeImapChild.on('close', async (code) => {
       activeImapChild = null;
       
       // Đồng bộ trạng thái đã tắt trong config
@@ -1883,7 +1883,7 @@ ipcMain.handle('imap:stop', async () => {
   }
 
   try {
-    activeImapChild.kill();
+    activeImapChild.kill('SIGTERM');
     activeImapChild = null;
     
     // Đồng bộ lại trạng thái tắt
@@ -1910,7 +1910,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (activeImapChild) {
-    try { activeImapChild.kill(); } catch {}
+    try { activeImapChild.kill('SIGKILL'); } catch {}
   }
   if (process.platform !== 'darwin') app.quit();
 });
@@ -1921,6 +1921,6 @@ app.on('activate', () => {
 
 app.on('will-quit', () => {
   if (activeImapChild) {
-    try { activeImapChild.kill(); } catch {}
+    try { activeImapChild.kill('SIGKILL'); } catch {}
   }
 });
