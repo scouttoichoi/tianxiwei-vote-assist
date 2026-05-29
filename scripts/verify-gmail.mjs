@@ -209,7 +209,8 @@ async function processGmailAccount(gmailConfig) {
 
     let lock = await client.getMailboxLock('INBOX');
     try {
-      const messages = await client.search({ unseen: true, from: 'admin@bugs.co.kr' });
+      await client.noop();
+      const messages = await client.search({ seen: false, from: 'admin@bugs.co.kr' });
 
       // Log siêu gọn nếu không có thư mới
       if (messages.length === 0) {
