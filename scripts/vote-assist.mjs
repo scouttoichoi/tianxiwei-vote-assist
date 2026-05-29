@@ -364,6 +364,7 @@ async function runSignupCommand(config, isAliasMode = false) {
           await appendLog({ status: 'signup-failed', error: error.message, failedAt: new Date().toISOString() }).catch(() => { });
         }
         return false;
+      });
       completed += ok ? 1 : 0;
 
       // Nếu chạy ở chế độ Alias và chưa tới lượt cuối, nghỉ 15 giây để Bugs kịp xử lý gửi email kích hoạt tiếp theo
