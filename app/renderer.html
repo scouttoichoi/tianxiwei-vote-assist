@@ -85,6 +85,15 @@
 
       <!-- Right Panel: Selected Instance Dashboard -->
       <section class="rightPanel">
+        <section class="awardPicker">
+          <label for="awardSelect" data-i18n="awardSelectLabel">Giải muốn vote</label>
+          <div class="awardPickerRow">
+            <select id="awardSelect"></select>
+            <button id="addAwardButton" type="button" data-i18n="addAward">Thêm giải</button>
+            <button id="deleteAwardButton" type="button" class="dangerAwardButton" data-i18n="deleteAward">Xóa giải</button>
+          </div>
+        </section>
+
         <div class="emptySelection" id="emptySelection">
           <div class="hintCard">
             <div class="hintIcon">⚡</div>
@@ -219,6 +228,27 @@
       </div>
       <div class="countDialogActions">
         <button id="confirmInstanceFormDialog" data-i18n="save">Lưu</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Add Award Dialog -->
+  <dialog id="awardDialog">
+    <div class="modalHeader">
+      <strong data-i18n="addAwardTitle">Thêm giải muốn vote</strong>
+      <button id="closeAwardDialog" data-i18n="close">Đóng</button>
+    </div>
+    <div class="countDialogBody">
+      <div class="formField">
+        <label for="awardNameInput" data-i18n="awardName">Tên giải</label>
+        <input id="awardNameInput" type="text" placeholder="G.OTT Awards Female Star">
+      </div>
+      <div class="formField">
+        <label for="awardUrlInput" data-i18n="awardUrl">Link giải</label>
+        <input id="awardUrlInput" type="url" placeholder="https://favorite.bugs.co.kr/3922">
+      </div>
+      <div class="countDialogActions">
+        <button id="saveAwardButton" data-i18n="save">Lưu</button>
       </div>
     </div>
   </dialog>

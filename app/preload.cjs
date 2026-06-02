@@ -28,6 +28,12 @@ contextBridge.exposeInMainWorld('txw', {
   // Shared Utilities
   downloadTemplate: (language, templateType, rootEmail, excludedAliases, aliasLimit) => ipcRenderer.invoke('instances:download-template', language, templateType, rootEmail, excludedAliases, aliasLimit),
   openHelp: (language) => ipcRenderer.invoke('help:open', language),
+
+  // Global award APIs
+  getAwards: () => ipcRenderer.invoke('awards:list'),
+  createAward: (name, url) => ipcRenderer.invoke('awards:create', name, url),
+  selectAward: (awardId) => ipcRenderer.invoke('awards:select', awardId),
+  deleteAward: (awardId) => ipcRenderer.invoke('awards:delete', awardId),
   
   // Event listeners
   onSetupStatus: (callback) => ipcRenderer.on('setup-status', (_event, value) => callback(value)),

@@ -1,6 +1,16 @@
 window.I18N = {
   vi: {
     languageName: 'Tiếng Việt',
+    awardSelectLabel: 'Giải muốn vote',
+    awardSelectPlaceholder: 'Chọn giải cần vote',
+    addAward: 'Thêm giải',
+    deleteAward: 'Xóa giải',
+    addAwardTitle: 'Thêm giải muốn vote',
+    awardName: 'Tên giải',
+    awardUrl: 'Link giải',
+    confirmDeleteAward: 'Bạn có chắc muốn xóa giải này?\n{name}',
+    selectAwardRequiredTitle: 'Chưa chọn giải',
+    selectAwardRequired: 'Vui lòng chọn giải cần vote.',
 
     mailAuthBtn: '📬 Xác thực Mail',
     imapDialogTitle: 'Tự động Xác thực Email (Gmail IMAP)',
@@ -346,6 +356,16 @@ window.I18N = {
 
   zh: {
     languageName: '中文',
+    awardSelectLabel: '投票奖项',
+    awardSelectPlaceholder: '请选择要投票的奖项',
+    addAward: '添加奖项',
+    deleteAward: '删除奖项',
+    addAwardTitle: '添加投票奖项',
+    awardName: '奖项名称',
+    awardUrl: '奖项链接',
+    confirmDeleteAward: '确定要删除这个奖项吗？\n{name}',
+    selectAwardRequiredTitle: '未选择奖项',
+    selectAwardRequired: '请先选择要投票的奖项。',
 
     mailAuthBtn: '📬 邮件验证',
     imapDialogTitle: '自动邮件验证 (Gmail IMAP)',
@@ -691,6 +711,16 @@ window.I18N = {
 
   en: {
     languageName: 'English',
+    awardSelectLabel: 'Award to Vote',
+    awardSelectPlaceholder: 'Select an award to vote',
+    addAward: 'Add Award',
+    deleteAward: 'Delete Award',
+    addAwardTitle: 'Add Award to Vote',
+    awardName: 'Award Name',
+    awardUrl: 'Award Link',
+    confirmDeleteAward: 'Are you sure you want to delete this award?\n{name}',
+    selectAwardRequiredTitle: 'No Award Selected',
+    selectAwardRequired: 'Please select an award to vote.',
 
     mailAuthBtn: '📬 Mail Auth',
     imapDialogTitle: 'Automatic Email Authentication (Gmail IMAP)',

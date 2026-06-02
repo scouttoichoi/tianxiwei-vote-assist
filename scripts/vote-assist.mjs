@@ -89,7 +89,7 @@ const TEMP_MAIL_PROVIDERS = [
 const BUGS_SIGNUP_URL = 'https://secure.bugs.co.kr/member/join/foreignerMemberMain';
 const BUGS_LOGIN_URL = 'https://music.bugs.co.kr/member/loginview';
 const BUGS_MUSIC_URL = 'https://music.bugs.co.kr/';
-const BUGS_FAVORITE_URL = 'https://favorite.bugs.co.kr/3922';
+const SELECT_AWARD_REQUIRED_MESSAGE = 'Vui lòng chọn giải cần vote.';
 const PASSWORD = 'Abcd@1234';
 const LOG_PATH = path.resolve('logs/vote-assist-runs.jsonl');
 const ACCOUNTS_PATH = path.resolve('data/accounts.json');
@@ -1862,7 +1862,25 @@ async function hasFavoriteCandidate(page) {
   return await candidate.count().catch(() => 0);
 }
 
+function getFavoriteVoteUrl(config = {}) {
+  const favoriteUrl = String(config.favoriteUrl || '').trim();
+  if (!favoriteUrl) {
+    throw new Error(SELECT_AWARD_REQUIRED_MESSAGE);
+  }
+
+  try {
+    const parsed = new URL(favoriteUrl);
+    if (!/^https:\/\/favorite\.bugs\.co\.kr\//i.test(parsed.href)) {
+      throw new Error('invalid-host');
+    }
+    return parsed.href;
+  } catch {
+    throw new Error('Link giải vote không hợp lệ.');
+  }
+}
+
 async function voteFavorite(context, config = {}) {
+  const favoriteUrl = getFavoriteVoteUrl(config);
   const votePage = await context.newPage();
   
   const voteState = {
@@ -1885,7 +1903,8 @@ async function voteFavorite(context, config = {}) {
   const deadline = Date.now() + (Number(config.voteRetryTimeoutMs) || VOTE_RETRY_TIMEOUT_MS);
   let scoreRecorded = false;
 
-  await votePage.goto(BUGS_FAVORITE_URL, { waitUntil: 'commit', timeout: 20_000 }).catch(() => { });
+  console.log(`[VOTE] Mở giải vote: ${config.favoriteName || favoriteUrl}`);
+  await votePage.goto(favoriteUrl, { waitUntil: 'commit', timeout: 20_000 }).catch(() => { });
   await votePage.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => { });
 
   for (let attempt = 1; Date.now() < deadline; attempt += 1) {

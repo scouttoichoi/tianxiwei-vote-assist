@@ -45,6 +45,14 @@ const downloadTemplateButton = document.getElementById('downloadTemplateButton')
 const historyButton = document.getElementById('historyButton');
 const helpButtonMain = document.getElementById('helpButtonMain');
 const helpButton = document.getElementById('helpButton');
+const awardSelect = document.getElementById('awardSelect');
+const addAwardButton = document.getElementById('addAwardButton');
+const deleteAwardButton = document.getElementById('deleteAwardButton');
+const awardDialog = document.getElementById('awardDialog');
+const closeAwardDialog = document.getElementById('closeAwardDialog');
+const saveAwardButton = document.getElementById('saveAwardButton');
+const awardNameInput = document.getElementById('awardNameInput');
+const awardUrlInput = document.getElementById('awardUrlInput');
 
 // Import Choice Dialog
 const importChoiceDialog = document.getElementById('importChoiceDialog');
@@ -91,6 +99,8 @@ const stopAllButton = document.getElementById('stopAllButton');
 let currentLanguage = localStorage.getItem('language') || 'vi';
 let instances = [];
 let selectedInstanceId = null;
+let awards = [];
+let selectedAwardId = '';
 const instanceLogs = new Map(); // key: instanceId, value: logText
 let editingInstanceId = null; // null if creating, string id if editing
 let emulatorPickerInstanceId = '';
@@ -243,6 +253,7 @@ function applyLanguage(language) {
   if (languageSelect) {
     languageSelect.value = language;
   }
+  renderAwardSelect();
 
   // Refresh instances to translate dynamic status badges
   renderInstancesList();
@@ -340,6 +351,41 @@ function openModal(title, html) {
   }
 }
 
+async function loadAwards() {
+  const result = await window.txw.getAwards();
+  awards = Array.isArray(result?.awards) ? result.awards : [];
+  selectedAwardId = result?.selectedAwardId || '';
+}
+
+function renderAwardSelect() {
+  if (!awardSelect) return;
+
+  const options = [
+    `<option value="">${escapeHtml(t('awardSelectPlaceholder'))}</option>`,
+    ...awards.map((award) => `
+      <option value="${escapeHtml(award.id)}">${escapeHtml(award.name)}</option>
+    `)
+  ];
+
+  awardSelect.innerHTML = options.join('');
+  awardSelect.value = selectedAwardId || '';
+
+  if (deleteAwardButton) {
+    deleteAwardButton.disabled = !selectedAwardId;
+  }
+}
+
+async function refreshAwards() {
+  await loadAwards();
+  renderAwardSelect();
+}
+
+function ensureAwardSelectedForVote() {
+  if (selectedAwardId) return true;
+  openModal(t('selectAwardRequiredTitle'), `<p>${t('selectAwardRequired')}</p>`);
+  return false;
+}
+
 // Render Instance List Table
 function renderInstancesList() {
   const tbody = document.getElementById('instancesTableBody');
@@ -421,6 +467,7 @@ function renderInstancesList() {
 
 // Refresh Instances List from main.cjs
 async function refreshInstances() {
+  await refreshAwards();
   instances = await window.txw.getInstances();
   renderInstancesList();
 
@@ -584,6 +631,10 @@ async function saveInstanceForm() {
 // Start specific instance process
 async function startInstanceProcess(instanceId, mode, optionsOverride = null, autoSelect = true) {
   let options = optionsOverride || {};
+
+  if ((mode === 'signup' || mode === 'signup-manual' || mode === 'login') && !ensureAwardSelectedForVote()) {
+    return;
+  }
 
   if ((mode === 'signup' || mode === 'signup-manual' || mode === 'signup-alias') && !optionsOverride) {
     const isAlias = mode === 'signup-alias';
@@ -1855,6 +1906,54 @@ languageSelect?.addEventListener('change', (event) => {
   applyLanguage(event.target.value);
 });
 
+awardSelect?.addEventListener('change', async () => {
+  try {
+    await window.txw.selectAward(awardSelect.value);
+    await refreshAwards();
+  } catch (error) {
+    openModal(t('error'), `<p>${escapeHtml(error.message || String(error))}</p>`);
+    await refreshAwards();
+  }
+});
+
+addAwardButton?.addEventListener('click', () => {
+  if (awardNameInput) awardNameInput.value = '';
+  if (awardUrlInput) awardUrlInput.value = '';
+  awardDialog?.showModal();
+  awardNameInput?.focus();
+});
+
+closeAwardDialog?.addEventListener('click', () => awardDialog?.close());
+awardDialog?.addEventListener('cancel', () => awardDialog?.close());
+
+saveAwardButton?.addEventListener('click', async () => {
+  const name = awardNameInput?.value.trim() || '';
+  const url = awardUrlInput?.value.trim() || '';
+
+  try {
+    await window.txw.createAward(name, url);
+    awardDialog?.close();
+    await refreshAwards();
+  } catch (error) {
+    openModal(t('error'), `<p>${escapeHtml(error.message || String(error))}</p>`);
+  }
+});
+
+deleteAwardButton?.addEventListener('click', async () => {
+  if (!selectedAwardId) return;
+
+  const award = awards.find((item) => item.id === selectedAwardId);
+  const message = t('confirmDeleteAward').replace('{name}', award?.name || '');
+  if (!window.confirm(message)) return;
+
+  try {
+    await window.txw.deleteAward(selectedAwardId);
+    await refreshAwards();
+  } catch (error) {
+    openModal(t('error'), `<p>${escapeHtml(error.message || String(error))}</p>`);
+  }
+});
+
 // Modal Events
 document.getElementById('closeModal').addEventListener('click', () => modal.close());
 
@@ -2209,6 +2308,8 @@ confirmInstanceFormDialog.addEventListener('click', saveInstanceForm);
 
 // Run/Stop All Actions
 runAllSignupButton.addEventListener('click', async () => {
+  if (!ensureAwardSelectedForVote()) return;
+
   const count = await requestSignupCount();
   if (count === null) return;
 
@@ -2229,6 +2330,8 @@ runAllSignupButton.addEventListener('click', async () => {
 });
 
 runAllSignupManualButton.addEventListener('click', async () => {
+  if (!ensureAwardSelectedForVote()) return;
+
   const count = await requestSignupCount();
   if (count === null) return;
 
@@ -2283,6 +2386,8 @@ runAllSignupAliasButton.addEventListener('click', async () => {
 });
 
 runAllLoginButton.addEventListener('click', async () => {
+  if (!ensureAwardSelectedForVote()) return;
+
   const snapshot = [...instances];
   for (const inst of snapshot) {
     const latest = instances.find((item) => item.id === inst.id) || inst;

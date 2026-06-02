@@ -391,6 +391,7 @@ async function ensureRuntimeDirs() {
 async function ensureInstanceConfig(instanceId, settings) {
   const instanceDir = getInstanceDir(instanceId);
   const configPath = path.join(instanceDir, 'vote-assist.config.json');
+  const selectedAward = getSelectedAward(settings);
 
   const index = Math.max(
     0,
@@ -412,6 +413,8 @@ async function ensureInstanceConfig(instanceId, settings) {
       ...(currentConfig.viewport || {})
     },
     ...currentConfig,
+    favoriteUrl: selectedAward?.url || '',
+    favoriteName: selectedAward?.name || '',
     args: currentConfig.args || getBrowserTileArgs(index, settings.instances.length)
   };
 
@@ -738,18 +741,90 @@ function ensureSetupWorkerReady() {
 }
 
 // Cấu hình Global
+function normalizeGlobalSettings(settings = {}) {
+  const normalized = settings && typeof settings === 'object' ? settings : {};
+
+  if (!Array.isArray(normalized.instances)) {
+    normalized.instances = [];
+  }
+
+  if (!Array.isArray(normalized.awards)) {
+    normalized.awards = [];
+  }
+
+  normalized.awards = normalized.awards
+    .map((award) => ({
+      id: String(award?.id || '').trim(),
+      name: String(award?.name || '').trim(),
+      url: String(award?.url || '').trim(),
+      createdAt: award?.createdAt || new Date().toISOString()
+    }))
+    .filter((award) => award.id && award.name && award.url);
+
+  if (typeof normalized.selectedAwardId !== 'string') {
+    normalized.selectedAwardId = '';
+  }
+
+  if (
+    normalized.selectedAwardId &&
+    !normalized.awards.some((award) => award.id === normalized.selectedAwardId)
+  ) {
+    normalized.selectedAwardId = '';
+  }
+
+  return normalized;
+}
+
 async function loadGlobalSettings() {
   try {
     const content = await fs.readFile(globalSettingsPath, 'utf8');
-    return JSON.parse(content);
+    return normalizeGlobalSettings(JSON.parse(content));
   } catch {
-    return { instances: [] };
+    return normalizeGlobalSettings({ instances: [] });
   }
 }
 
 async function saveGlobalSettings(settings) {
   await fs.mkdir(runtimeDir, { recursive: true });
-  await fs.writeFile(globalSettingsPath, JSON.stringify(settings, null, 2));
+  await fs.writeFile(globalSettingsPath, JSON.stringify(normalizeGlobalSettings(settings), null, 2));
+}
+
+function getSelectedAward(settings) {
+  const normalized = normalizeGlobalSettings(settings);
+  return normalized.awards.find((award) => award.id === normalized.selectedAwardId) || null;
+}
+
+function requireSelectedAward(settings) {
+  const award = getSelectedAward(settings);
+  if (!award?.url) {
+    throw new Error('Vui lòng chọn giải cần vote.');
+  }
+  return award;
+}
+
+function normalizeAwardInput(name, url) {
+  const nextName = String(name || '').trim();
+  const rawUrl = String(url || '').trim();
+
+  if (!nextName) {
+    throw new Error('Vui lòng nhập tên giải.');
+  }
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch {
+    throw new Error('Vui lòng nhập link giải hợp lệ.');
+  }
+
+  if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'favorite.bugs.co.kr') {
+    throw new Error('Link giải phải là link https://favorite.bugs.co.kr/...');
+  }
+
+  return {
+    name: nextName,
+    url: parsedUrl.href
+  };
 }
 
 // Cấu hình của từng Instance
@@ -1113,6 +1188,7 @@ ipcMain.handle('instances:list', async () => {
 
 ipcMain.handle('instances:create', async (_event, name, proxyStr = '') => {
   const settings = await loadGlobalSettings();
+  const selectedAward = getSelectedAward(settings);
   const instanceId = 'inst_' + Date.now();
   const instanceDir = getInstanceDir(instanceId);
 
@@ -1131,6 +1207,8 @@ ipcMain.handle('instances:create', async (_event, name, proxyStr = '') => {
       width: 600,
       height: 460
     },
+    favoriteUrl: selectedAward?.url || '',
+    favoriteName: selectedAward?.name || '',
     args: getBrowserTileArgs(index, settings.instances.length + 1)
   };
 
@@ -1206,6 +1284,83 @@ ipcMain.handle('instances:update-config', async (_event, instanceId, name, proxy
 });
 
 // Điều khiển tiến trình của Instance
+ipcMain.handle('awards:list', async () => {
+  const settings = await loadGlobalSettings();
+  return {
+    awards: settings.awards,
+    selectedAwardId: settings.selectedAwardId || ''
+  };
+});
+
+ipcMain.handle('awards:create', async (_event, name, url) => {
+  const settings = await loadGlobalSettings();
+  const input = normalizeAwardInput(name, url);
+  const existing = settings.awards.find((award) => award.url === input.url);
+
+  if (existing) {
+    existing.name = input.name;
+    settings.selectedAwardId = existing.id;
+    await saveGlobalSettings(settings);
+    return existing;
+  }
+
+  const award = {
+    id: `award_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: input.name,
+    url: input.url,
+    createdAt: new Date().toISOString()
+  };
+
+  settings.awards.push(award);
+  settings.selectedAwardId = award.id;
+  await saveGlobalSettings(settings);
+  return award;
+});
+
+ipcMain.handle('awards:select', async (_event, awardId = '') => {
+  const settings = await loadGlobalSettings();
+  const nextAwardId = String(awardId || '').trim();
+
+  if (nextAwardId && !settings.awards.some((award) => award.id === nextAwardId)) {
+    throw new Error('Không tìm thấy giải cần vote.');
+  }
+
+  settings.selectedAwardId = nextAwardId;
+  await saveGlobalSettings(settings);
+
+  return {
+    ok: true,
+    selectedAwardId: settings.selectedAwardId
+  };
+});
+
+ipcMain.handle('awards:delete', async (_event, awardId = '') => {
+  const settings = await loadGlobalSettings();
+  const targetAwardId = String(awardId || '').trim();
+
+  if (!targetAwardId) {
+    throw new Error('Vui lòng chọn giải cần xóa.');
+  }
+
+  const beforeCount = settings.awards.length;
+  settings.awards = settings.awards.filter((award) => award.id !== targetAwardId);
+
+  if (settings.awards.length === beforeCount) {
+    throw new Error('Không tìm thấy giải cần xóa.');
+  }
+
+  if (settings.selectedAwardId === targetAwardId) {
+    settings.selectedAwardId = '';
+  }
+
+  await saveGlobalSettings(settings);
+
+  return {
+    ok: true,
+    selectedAwardId: settings.selectedAwardId
+  };
+});
+
 ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {}) => {
   if (activeWorkers.has(instanceId)) {
     return {
@@ -1223,6 +1378,10 @@ ipcMain.handle('instances:start', async (_event, instanceId, mode, options = {})
   else if (mode === 'ads') command = 'ads';
   else if (mode === 'signup-alias') command = 'signup-alias';
   const uiMode = mode === 'signup-manual' ? 'signup-manual' : (mode === 'signup-alias-manual' ? 'signup-alias-manual' : (mode === 'signup-alias' ? 'signup-alias' : command));
+
+  if (command === 'signup' || command === 'login') {
+    requireSelectedAward(settings);
+  }
 
   const adbDeviceId = command === 'ads' ? String(options.emulatorDevice || '').trim() : '';
   let adbDeviceLocks = [];
