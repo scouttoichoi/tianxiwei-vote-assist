@@ -138,23 +138,23 @@ async function isVoteLoginRequired(page) {
 }
 
 async function hasFavoriteCandidate(page) {
-  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote').first();
+  const voteButton = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).locator('button.btnVote').first();
   if (await voteButton.count().catch(() => 0)) {
     return true;
   }
-  const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+  const candidate = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).first();
   return await candidate.count().catch(() => 0);
 }
 
 async function prepareFavoritePage(page) {
   await page.waitForLoadState('domcontentloaded').catch(() => {});
   await page.locator('text=/ENG/i').first().click().catch(() => {});
-  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote').first();
+  const voteButton = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).locator('button.btnVote').first();
   if (await voteButton.count().catch(() => 0)) {
     await voteButton.scrollIntoViewIfNeeded().catch(() => {});
     return;
   }
-  const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+  const candidate = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).first();
   if (await candidate.count().catch(() => 0)) {
     await candidate.scrollIntoViewIfNeeded().catch(() => {});
   }
@@ -200,7 +200,7 @@ async function recordVoteScores(page) {
       })
       .filter((candidate) => candidate.name && candidate.votes);
 
-    const tian = candidates.find((candidate) => /TIAN\s+Xiwei/i.test(candidate.name));
+    const tian = candidates.find((candidate) => /TIAN\s+Xiwei|톈시웨이/i.test(candidate.name));
     const top1 = candidates[0] ?? candidates.reduce((best, candidate) => (
       candidate.votes > (best?.votes ?? 0) ? candidate : best
     ), null);
@@ -276,7 +276,7 @@ async function voteBugsFavorite(page) {
 
       console.log('   🗳️ [VOTE OPTIMIZE] Đã thấy candidate TIAN Xiwei. Thử bấm vote...');
       
-      const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+      const candidate = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).first();
       const voteButton = candidate.locator('button.btnVote[data-action="vote_candidate"]').first();
 
       await candidate.waitFor({ state: 'visible', timeout: 10000 });

@@ -125,13 +125,20 @@ async function initCaptchaSolver(config) {
 
   if (process.platform !== 'win32') {
     if (isPythonSupported === null) {
-      try {
-        await execAsync(`python3 -c "import ddddocr"`);
-        isPythonSupported = true;
-        console.log('[DEBUG Solver] Phát hiện Python 3 & ddddocr hoạt động tốt.');
-      } catch (e) {
+      const candidates = process.platform === 'darwin' ? ['/usr/bin/python3', 'python3'] : ['python3'];
+      for (const cmd of candidates) {
+        try {
+          await execAsync(`"${cmd}" -c "import ddddocr"`);
+          isPythonSupported = cmd; // Lưu lại lệnh python chạy được
+          console.log(`[DEBUG Solver] Phát hiện ${cmd} & ddddocr hoạt động tốt.`);
+          break;
+        } catch (e) {
+          // Thử tiếp candidate khác
+        }
+      }
+      if (!isPythonSupported) {
         isPythonSupported = false;
-        console.log('[DEBUG Solver] Không có sẵn Python 3 / ddddocr. Dùng file nhị phân làm phương án chạy.');
+        console.log('[DEBUG Solver] Không có sẵn Python 3 / ddddocr hoạt động tốt. Dùng file nhị phân làm phương án chạy.');
       }
     }
 
@@ -140,7 +147,7 @@ async function initCaptchaSolver(config) {
       if (solverPy.includes('app.asar')) {
         solverPy = solverPy.replace('app.asar', 'app.asar.unpacked');
       }
-      solverCmd = 'python3';
+      solverCmd = isPythonSupported;
       solverArgs = [solverPy];
     }
   }
@@ -1830,14 +1837,14 @@ async function clickConfirmAfterAuth(page) {
 async function prepareFavoritePage(page) {
   await page.waitForLoadState('domcontentloaded');
   await page.locator('text=/ENG/i').first().click().catch(() => { });
-  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote').first();
+  const voteButton = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).locator('button.btnVote').first();
   if (await voteButton.count().catch(() => 0)) {
     await voteButton.scrollIntoViewIfNeeded();
     await voteButton.highlight().catch(() => { });
     return;
   }
 
-  const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+  const candidate = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).first();
   if (await candidate.count().catch(() => 0)) {
     await candidate.scrollIntoViewIfNeeded();
     await candidate.highlight().catch(() => { });
@@ -1853,12 +1860,12 @@ async function isVoteLoginRequired(page) {
 }
 
 async function hasFavoriteCandidate(page) {
-  const voteButton = page.locator('li:has-text("TIAN Xiwei") button.btnVote').first();
+  const voteButton = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).locator('button.btnVote').first();
   if (await voteButton.count().catch(() => 0)) {
     return true;
   }
 
-  const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+  const candidate = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).first();
   return await candidate.count().catch(() => 0);
 }
 
@@ -1961,7 +1968,7 @@ async function recordVoteScores(page) {
       })
       .filter((candidate) => candidate.name && candidate.votes);
 
-    const tian = candidates.find((candidate) => /TIAN\s+Xiwei/i.test(candidate.name));
+    const tian = candidates.find((candidate) => /TIAN\s+Xiwei|톈시웨이/i.test(candidate.name));
     const top1 = candidates[0] ?? candidates.reduce((best, candidate) => (
       candidate.votes > (best?.votes ?? 0) ? candidate : best
     ), null);
@@ -2013,7 +2020,7 @@ function csvValue(value) {
 }
 
 async function completeFavoriteVote(page, voteState) {
-  const candidate = page.locator('li:has-text("TIAN Xiwei")').first();
+  const candidate = page.locator('li').filter({ hasText: /TIAN\s+Xiwei|톈시웨이/i }).first();
   const voteButton = candidate
     .locator('button.btnVote[data-action="vote_candidate"]')
     .first();
